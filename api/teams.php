@@ -2,66 +2,78 @@
 require_once __DIR__ . '/helpers.php';
 
 $action = getAction();
-$method = $_SERVER['REQUEST_METHOD'];
 
 try {
-    $db = getDB();
+    $db = dbLoad();
 
-    if ($method === 'GET' && $action === 'list') {
-        $stmt = $db->query('SELECT * FROM teams ORDER BY draft_order ASC');
-        jsonResponse($stmt->fetchAll());
+    if ($action === 'list') {
+        $teams = $db['teams'];
+        usort($teams, fn($a, $b) => $a['draft_order'] <=> $b['draft_order']);
+        jsonResponse($teams);
 
-    } elseif ($method === 'POST' && $action === 'create') {
+    } elseif ($action === 'create') {
         $data = getInput();
         if (empty($data['name'])) jsonError('name is required');
 
-        // Auto-assign draft_order if not provided
-        if (!isset($data['draft_order'])) {
-            $stmt = $db->query('SELECT COALESCE(MAX(draft_order), 0) + 1 AS next FROM teams');
-            $data['draft_order'] = (int)$stmt->fetchColumn();
+        $maxOrder = empty($db['teams']) ? 0 : max(array_column($db['teams'], 'draft_order'));
+        $team = [
+            'id'          => nextId($db['teams']),
+            'name'        => $data['name'],
+            'draft_order' => isset($data['draft_order']) ? (int)$data['draft_order'] : $maxOrder + 1,
+            'created_at'  => nowUtc(),
+        ];
+        $db['teams'][] = $team;
+        dbSave($db);
+        jsonResponse($team, 201);
+
+    } elseif ($action === 'update') {
+        $data = getInput();
+        if (empty($data['id'])) jsonError('id is required');
+        $id = (int)$data['id'];
+        foreach ($db['teams'] as &$t) {
+            if ($t['id'] === $id) {
+                $t['name']        = $data['name'] ?? $t['name'];
+                $t['draft_order'] = isset($data['draft_order']) ? (int)$data['draft_order'] : $t['draft_order'];
+                break;
+            }
         }
-
-        $stmt = $db->prepare('INSERT INTO teams (name, draft_order) VALUES (?, ?)');
-        $stmt->execute([$data['name'], (int)$data['draft_order']]);
-        $id = $db->lastInsertId();
-        $stmt = $db->prepare('SELECT * FROM teams WHERE id = ?');
-        $stmt->execute([$id]);
-        jsonResponse($stmt->fetch(), 201);
-
-    } elseif ($method === 'POST' && $action === 'update') {
-        $data = getInput();
-        if (empty($data['id'])) jsonError('id is required');
-        $stmt = $db->prepare('UPDATE teams SET name=?, draft_order=? WHERE id=?');
-        $stmt->execute([$data['name'], (int)$data['draft_order'], (int)$data['id']]);
+        unset($t);
+        dbSave($db);
         jsonResponse(['success' => true]);
 
-    } elseif ($method === 'POST' && $action === 'delete') {
+    } elseif ($action === 'delete') {
         $data = getInput();
         if (empty($data['id'])) jsonError('id is required');
-        $stmt = $db->prepare('DELETE FROM teams WHERE id = ?');
-        $stmt->execute([(int)$data['id']]);
+        $id = (int)$data['id'];
+        $db['teams'] = array_values(array_filter($db['teams'], fn($t) => $t['id'] !== $id));
+        dbSave($db);
         jsonResponse(['success' => true]);
 
-    } elseif ($method === 'POST' && $action === 'reorder') {
-        // [{id, draft_order}, ...]
+    } elseif ($action === 'reorder') {
         $data = getInput();
         if (!is_array($data)) jsonError('Expected array');
-        $stmt = $db->prepare('UPDATE teams SET draft_order=? WHERE id=?');
-        $db->beginTransaction();
+        $orderMap = [];
         foreach ($data as $item) {
-            $stmt->execute([(int)$item['draft_order'], (int)$item['id']]);
+            $orderMap[(int)$item['id']] = (int)$item['draft_order'];
         }
-        $db->commit();
+        foreach ($db['teams'] as &$t) {
+            if (isset($orderMap[$t['id']])) {
+                $t['draft_order'] = $orderMap[$t['id']];
+            }
+        }
+        unset($t);
+        dbSave($db);
         jsonResponse(['success' => true]);
 
-    } elseif ($method === 'POST' && $action === 'clear_all') {
-        $db->exec('DELETE FROM teams');
+    } elseif ($action === 'clear_all') {
+        $db['teams'] = [];
+        dbSave($db);
         jsonResponse(['success' => true]);
 
     } else {
         jsonError('Unknown action', 404);
     }
 
-} catch (PDOException $e) {
-    jsonError('Database error: ' . $e->getMessage(), 500);
+} catch (Exception $e) {
+    jsonError('Error: ' . $e->getMessage(), 500);
 }

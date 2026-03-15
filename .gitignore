@@ -1,6 +1,9 @@
 # Environment / config
 api/config.php
 
+# Runtime data (JSON file storage)
+data/db.json
+
 # OS / IDE
 .DS_Store
 Thumbs.db
