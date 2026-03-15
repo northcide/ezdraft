@@ -431,6 +431,49 @@ async function triggerAutoPick() {
   } catch (e) { console.warn('Auto-pick error:', e.message); }
 }
 
+// ── Audio / Haptics ───────────────────────────────────────────────────────────
+let audioCtx = null;
+
+function unlockAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (_) {}
+}
+// iOS Safari requires AudioContext creation inside a user gesture
+document.addEventListener('touchstart', unlockAudio, { passive: true });
+document.addEventListener('click',      unlockAudio, { passive: true });
+
+function playPickSound(isComplete = false) {
+  // Haptic feedback — works on Android; iOS does not support navigator.vibrate
+  if (navigator.vibrate) {
+    navigator.vibrate(isComplete ? [100, 60, 100, 60, 200] : [100]);
+  }
+  // Synthesised chime via Web Audio API
+  if (!audioCtx) return; // not yet unlocked (iOS autoplay restriction)
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Normal pick: two-note ding (E5 → G5)
+    // Draft complete: four-note ascending fanfare (C5 E5 G5 C6)
+    const freqs = isComplete ? [523.25, 659.25, 783.99, 1046.50] : [659.25, 783.99];
+    freqs.forEach((freq, i) => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = audioCtx.currentTime + i * 0.13;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+      osc.start(t);
+      osc.stop(t + 0.5);
+    });
+  } catch (_) {}
+}
+
 // ── Announcement ──────────────────────────────────────────────────────────────
 function showAnnouncement(pick, player, isAuto = false) {
   const el = document.getElementById('announcement');
@@ -447,6 +490,7 @@ function showAnnouncement(pick, player, isAuto = false) {
   void el.offsetWidth; // trigger reflow
   el.style.animation = '';
   if (inner) inner.style.animation = '';
+  playPickSound();
   if (state.announcementTimeout) clearTimeout(state.announcementTimeout);
   state.announcementTimeout = setTimeout(() => {
     el.classList.add('fadeout');
@@ -475,6 +519,7 @@ function showDraftComplete() {
     setTimeout(() => el.classList.add('hidden'), 500);
   }, 5000);
 
+  playPickSound(true);
   // Persistent banner (shown until draft is no longer completed)
   document.getElementById('draft-complete-banner').classList.remove('hidden');
 }
