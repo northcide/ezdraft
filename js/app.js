@@ -25,6 +25,9 @@ const state = {
   timerMax:         0,
   announcementTimeout: null,
   dragPlayerId:     null,
+  teamsNeedSetup:       false,
+  mobilePlayerListVisible:  false,
+  mobileAvailableOnly:      true,
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -78,6 +81,10 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 });
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
+  if (state.teamsNeedSetup && !confirm('You have unsaved pick order changes. Sign out anyway?')) {
+    switchAdminTab('teams');
+    return;
+  }
   await api(API.auth, 'logout', {});
   stopTimer();
   stopPolling();
@@ -188,20 +195,30 @@ function renderAdminDraftSelector() {
   const delBtn  = document.getElementById('btn-delete-draft');
   const content = document.getElementById('draft-content');
 
+  const controls = document.getElementById('draft-controls-inline');
   if (state.draft && state.selectedDraftId) {
     badge.className = `badge badge-${state.draft.status}`;
     badge.textContent = state.draft.status;
     badge.classList.remove('hidden');
     delBtn.classList.toggle('hidden', state.draft.status === 'active');
-    if (content) content.classList.remove('hidden');
+    if (content)   content.classList.remove('hidden');
+    if (controls) controls.classList.remove('hidden');
   } else {
     badge.classList.add('hidden');
     delBtn.classList.add('hidden');
-    if (content) content.classList.add('hidden');
+    if (content)   content.classList.add('hidden');
+    if (controls) controls.classList.add('hidden');
   }
 }
 
 document.getElementById('draft-selector').addEventListener('change', async function() {
+  if (state.teamsNeedSetup) {
+    // Revert the visual selection back; block navigation
+    this.value = state.selectedDraftId || '';
+    shakeSetupWarning();
+    switchAdminTab('players');
+    return;
+  }
   const id = parseInt(this.value, 10);
   if (!id) {
     state.selectedDraftId = null;
@@ -259,7 +276,6 @@ document.getElementById('coach-draft-selector').addEventListener('change', async
 function fillSettingsForm() {
   const d = state.draft;
   const nameEl      = document.getElementById('setting-draft-name');
-  const roundsEl    = document.getElementById('setting-rounds');
   const timerEl     = document.getElementById('setting-timer');
   const autoEl      = document.getElementById('setting-autopick');
   const coachNameEl = document.getElementById('setting-coach-name');
@@ -268,13 +284,12 @@ function fillSettingsForm() {
   if (!nameEl) return;
   if (d) {
     nameEl.value      = d.name          || '';
-    roundsEl.value    = d.total_rounds  || 10;
     timerEl.value     = d.timer_minutes || 2;
     autoEl.checked    = !!d.auto_pick_enabled;
     coachNameEl.value = d.coach_name    || '';
     coachPinEl.value  = d.coach_pin     || '';
   } else {
-    nameEl.value = ''; roundsEl.value = 10; timerEl.value = 2;
+    nameEl.value = ''; timerEl.value = 2;
     autoEl.checked = true; coachNameEl.value = ''; coachPinEl.value = '';
   }
 }
@@ -299,6 +314,7 @@ document.getElementById('btn-confirm-new-draft').addEventListener('click', async
     document.getElementById('new-draft-inline').classList.add('hidden');
     document.getElementById('btn-new-draft').classList.remove('hidden');
     applyState(data);
+    switchAdminTab('settings');
   } catch (e) {
     alert('Error: ' + e.message);
   }
@@ -325,7 +341,6 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
   if (!state.draft) return;
   const payload = {
     name:              document.getElementById('setting-draft-name').value.trim(),
-    total_rounds:      parseInt(document.getElementById('setting-rounds').value, 10),
     timer_minutes:     parseInt(document.getElementById('setting-timer').value, 10),
     auto_pick_enabled: document.getElementById('setting-autopick').checked ? 1 : 0,
     coach_name:        document.getElementById('setting-coach-name').value.trim(),
@@ -345,10 +360,15 @@ document.getElementById('btn-setup-picks').addEventListener('click', async () =>
   if (!confirm('Build pick order from current teams? This will reset any pre-assignments.')) return;
   try {
     const data = await api(API.drafts, 'setup_picks', {});
+    setTeamsNeedSetup(false);
     applyState(data);
   } catch (e) {
     alert('Error: ' + e.message);
   }
+});
+
+document.getElementById('btn-setup-picks-cancel').addEventListener('click', () => {
+  setTeamsNeedSetup(false);
 });
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
@@ -466,8 +486,174 @@ async function makePick(pickNum, playerId, player) {
   } catch (e) { alert('Pick error: ' + e.message); }
 }
 
+// ── Mobile Board (coach read-only, small screens) ─────────────────────────────
+function renderMobileBoard() {
+  const wrap = document.getElementById('board-wrap');
+  if (!state.draft || state.teams.length === 0 || state.picks.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">' +
+      (state.draft ? 'Waiting for draft board to be set up.' : 'No draft in progress.') +
+      '</div>';
+    return;
+  }
+
+  const teams      = state.teams;
+  const rounds     = state.draft.total_rounds;
+  const n          = teams.length;
+  const currentNum = state.draft.current_pick_num;
+  const isActive   = state.draft.status === 'active';
+  const pickMap    = {};
+  state.picks.forEach(p => { pickMap[p.pick_num] = p; });
+  const draftedIds = new Set(state.picks.filter(p => p.player_id).map(p => Number(p.player_id)));
+
+  const container = document.createElement('div');
+  container.className = 'mobile-board';
+
+  // ── On the clock banner ──
+  if (isActive) {
+    const cp = pickMap[currentNum];
+    if (cp) {
+      const banner = document.createElement('div');
+      banner.className = 'mobile-on-clock';
+      banner.innerHTML =
+        `<span class="mobile-clock-label">On the Clock</span>` +
+        `<span class="mobile-clock-team">${esc(cp.team_name)}</span>` +
+        `<span class="mobile-clock-pick">Pick #${currentNum}</span>`;
+      container.appendChild(banner);
+    }
+  }
+
+  // ── Toolbar: Show Players ──
+  const toolbar = document.createElement('div');
+  toolbar.className = 'mobile-toolbar';
+
+  const playersBtn = document.createElement('button');
+  playersBtn.className = 'btn btn-sm ' + (state.mobilePlayerListVisible ? 'btn-primary' : 'btn-secondary');
+  playersBtn.textContent = state.mobilePlayerListVisible ? 'Hide Players' : 'Show Players';
+  playersBtn.addEventListener('click', () => {
+    state.mobilePlayerListVisible = !state.mobilePlayerListVisible;
+    renderMobileBoard();
+  });
+
+  toolbar.appendChild(playersBtn);
+  container.appendChild(toolbar);
+
+  // ── Player list panel ──
+  if (state.mobilePlayerListVisible) {
+    const panel = document.createElement('div');
+    panel.className = 'mobile-player-panel';
+
+    const panelHeader = document.createElement('div');
+    panelHeader.className = 'mobile-player-panel-header';
+
+    const availId = 'mobile-avail-' + Date.now();
+    panelHeader.innerHTML =
+      `<span class="mobile-player-panel-title">Players</span>` +
+      `<label class="mobile-avail-label" for="${availId}">` +
+        `<input type="checkbox" id="${availId}" ${state.mobileAvailableOnly ? 'checked' : ''}>` +
+        ` Available only` +
+      `</label>`;
+    panelHeader.querySelector('input').addEventListener('change', e => {
+      state.mobileAvailableOnly = e.target.checked;
+      renderMobileBoard();
+    });
+    panel.appendChild(panelHeader);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'mobile-player-scroll';
+
+    let players = [...state.players].sort((a, b) => a.rank - b.rank);
+    if (state.mobileAvailableOnly) players = players.filter(p => !draftedIds.has(Number(p.id)));
+
+    if (players.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = state.mobileAvailableOnly ? 'No available players.' : 'No players loaded.';
+      scroll.appendChild(empty);
+    } else {
+      players.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'mobile-player-row' + (draftedIds.has(Number(p.id)) ? ' is-drafted' : '');
+        row.innerHTML =
+          `<span class="mobile-player-rank">#${p.rank}</span>` +
+          `<span class="mobile-player-name">${esc(p.name)}</span>` +
+          (draftedIds.has(Number(p.id)) ? `<span class="mobile-player-drafted">drafted</span>` : '');
+        scroll.appendChild(row);
+      });
+    }
+    panel.appendChild(scroll);
+    container.appendChild(panel);
+  }
+
+  // ── Round cards ──
+  for (let r = 1; r <= rounds; r++) {
+    const start          = (r - 1) * n + 1;
+    const end            = r * n;
+    const isCurrentRound = currentNum >= start && currentNum <= end;
+    let   filled         = 0;
+    for (let p = start; p <= end; p++) { if (pickMap[p]?.player_id) filled++; }
+
+    const card = document.createElement('div');
+    card.className = 'mobile-round-card' + (isCurrentRound ? ' is-current-round' : '');
+
+    const header = document.createElement('div');
+    header.className = 'mobile-round-header';
+    header.innerHTML =
+      `<span class="mobile-round-num">Round ${r}</span>` +
+      `<span class="mobile-round-progress">${filled} / ${n}</span>` +
+      `<span class="mobile-round-chevron">${isCurrentRound ? '▲' : '▼'}</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'mobile-round-body' + (isCurrentRound ? '' : ' hidden');
+
+    for (let p = start; p <= end; p++) {
+      const pick      = pickMap[p];
+      if (!pick) continue;
+      const isCurrent = p === currentNum && isActive;
+      const isFilled  = !!pick.player_id;
+
+      const row = document.createElement('div');
+      row.className = 'mobile-pick-row' +
+        (isCurrent ? ' is-on-clock' : '') +
+        (isFilled  ? ' is-filled'   : '');
+
+      let playerCell = '';
+      if (isFilled) {
+        playerCell = `<span class="mobile-pick-player">${esc(pick.player_name)}</span>`;
+      } else if (isCurrent) {
+        playerCell = `<span class="mobile-pick-player is-clock">selecting&hellip;</span>`;
+      } else {
+        playerCell = `<span class="mobile-pick-player is-empty">&mdash;</span>`;
+      }
+
+      row.innerHTML =
+        `<span class="mobile-pick-num">#${p}</span>` +
+        `<span class="mobile-pick-team">${esc(pick.team_name)}</span>` +
+        playerCell;
+      body.appendChild(row);
+    }
+
+    header.addEventListener('click', () => {
+      body.classList.toggle('hidden');
+      header.querySelector('.mobile-round-chevron').textContent =
+        body.classList.contains('hidden') ? '▼' : '▲';
+    });
+
+    card.appendChild(header);
+    card.appendChild(body);
+    container.appendChild(card);
+  }
+
+  wrap.innerHTML = '';
+  wrap.appendChild(container);
+}
+
+function isMobileCoach() {
+  return state.role === 'coach' && window.innerWidth < 768;
+}
+
 // ── Board ─────────────────────────────────────────────────────────────────────
 function renderBoard() {
+  if (isMobileCoach()) { renderMobileBoard(); return; }
   const wrap = document.getElementById('board-wrap');
   if (!state.draft || state.teams.length === 0 || state.picks.length === 0) {
     wrap.innerHTML = '<div class="empty-state">' +
@@ -536,9 +722,15 @@ function renderBoard() {
       if (isFilled) {
         td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
           <span class="cell-player">${pick.player_name.split(' ').map(w => `<span>${esc(w)}</span>`).join('')}</span>
-          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}`;
-        td.title = 'Right-click to clear pick';
-        td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
+          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}
+          ${state.role === 'admin' ? '<button class="cell-clear-btn" title="Remove pick">\u2715</button>' : ''}`;
+        if (state.role === 'admin') {
+          td.querySelector('.cell-clear-btn').addEventListener('click', e => {
+            e.stopPropagation();
+            clearPick(pick.pick_num);
+          });
+          td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
+        }
       } else {
         td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
           ${isCurrent ? '<span class="cell-clock-label">ON THE CLOCK</span>' : ''}`;
@@ -671,6 +863,7 @@ async function addTeam() {
     await api(API.teams, 'create', { name });
     input.value = '';
     await fetchState();
+    setTeamsNeedSetup(true);
   } catch (e) { alert('Error: ' + e.message); }
 }
 
@@ -678,23 +871,30 @@ async function deleteTeam(id) {
   try {
     await api(API.teams, 'delete', { id });
     await fetchState();
+    setTeamsNeedSetup(true);
   } catch (e) { alert('Error: ' + e.message); }
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 function updateControls() {
-  const status      = state.draft?.status || 'none';
-  const btnStart    = document.getElementById('btn-start');
-  const btnPause    = document.getElementById('btn-pause');
-  const btnResume   = document.getElementById('btn-resume');
-  const btnEnd      = document.getElementById('btn-end');
-  const btnAutopick = document.getElementById('btn-autopick-now');
+  const status        = state.draft?.status || 'none';
+  const btnStart      = document.getElementById('btn-start');
+  const btnRestart    = document.getElementById('btn-restart');
+  const btnPause      = document.getElementById('btn-pause');
+  const btnResume     = document.getElementById('btn-resume');
+  const btnEnd        = document.getElementById('btn-end');
+  const btnAutopick   = document.getElementById('btn-autopick-now');
+  const btnResetPicks = document.getElementById('btn-reset-picks');
 
+  const isCompleted = status === 'completed';
+  btnStart.classList.toggle('hidden', isCompleted);
   btnStart.disabled  = !(status === 'setup');
+  btnRestart.classList.toggle('hidden', !isCompleted);
   btnEnd.disabled    = !(status === 'active' || status === 'paused');
   btnPause.classList.toggle('hidden',    status !== 'active');
   btnResume.classList.toggle('hidden',   status !== 'paused');
   btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
+  if (btnResetPicks) btnResetPicks.disabled = (status === 'active');
 }
 
 function updateStatusBadge() {
@@ -713,14 +913,18 @@ function updateCurrentPickLabel() {
 
 // ── Draft Control Buttons ─────────────────────────────────────────────────────
 document.getElementById('btn-admin').addEventListener('click', () => {
-  const adminPanel   = document.getElementById('admin-panel');
-  const rankingsView = document.getElementById('rankings-view');
-  const reorderView  = document.getElementById('reorder-view');
-  adminPanel.classList.toggle('hidden');
-  const adminOpen = !adminPanel.classList.contains('hidden');
-  rankingsView.classList.toggle('hidden', adminOpen);
-  reorderView.classList.toggle('hidden', !adminOpen);
-  if (adminOpen) renderReorderList();
+  document.getElementById('admin-panel').classList.toggle('hidden');
+});
+
+document.getElementById('btn-toggle-reorder').addEventListener('click', () => {
+  document.getElementById('rankings-view').classList.add('hidden');
+  document.getElementById('reorder-view').classList.remove('hidden');
+  renderReorderList();
+});
+
+document.getElementById('btn-close-reorder').addEventListener('click', () => {
+  document.getElementById('reorder-view').classList.add('hidden');
+  document.getElementById('rankings-view').classList.remove('hidden');
 });
 
 document.getElementById('btn-add-team').addEventListener('click', addTeam);
@@ -750,6 +954,24 @@ document.getElementById('btn-end').addEventListener('click', async () => {
   catch (e) { alert('Error: ' + e.message); }
 });
 
+document.getElementById('btn-restart').addEventListener('click', async () => {
+  if (!confirm('Restart draft from the first unfilled pick? Existing picks will be kept.')) return;
+  try {
+    const data = await api(API.drafts, 'restart', {});
+    applyState(data);
+    startPolling();
+    startTimer();
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+document.getElementById('btn-reset-picks').addEventListener('click', async () => {
+  if (!confirm('Reset ALL picks? This will clear every player assignment and return the draft to setup. This cannot be undone.')) return;
+  try {
+    const data = await api(API.drafts, 'reset_picks', {});
+    applyState(data);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
 document.getElementById('btn-autopick-now').addEventListener('click', async () => {
   try {
     const result = await api(API.drafts, 'autopick', {});
@@ -764,6 +986,44 @@ document.getElementById('btn-autopick-now').addEventListener('click', async () =
 // ── Filters ───────────────────────────────────────────────────────────────────
 document.getElementById('filter-search').addEventListener('input', renderRankings);
 document.getElementById('filter-available').addEventListener('change', renderRankings);
+
+// ── Admin Tabs ────────────────────────────────────────────────────────────────
+function switchAdminTab(name) {
+  if (state.teamsNeedSetup && name !== 'teams' && name !== 'players') {
+    shakeSetupWarning();
+    return;
+  }
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.add('hidden'));
+  const tab = document.querySelector(`.admin-tab[data-tab="${name}"]`);
+  if (tab) tab.classList.add('active');
+  const panel = document.getElementById('admin-tab-' + name);
+  if (panel) panel.classList.remove('hidden');
+}
+
+function setTeamsNeedSetup(needed) {
+  state.teamsNeedSetup = needed;
+  const btn     = document.getElementById('btn-setup-picks');
+  const cancel  = document.getElementById('btn-setup-picks-cancel');
+  const warning = document.getElementById('setup-picks-warning');
+  const tabs    = document.querySelectorAll('.admin-tab:not([data-tab="teams"])');
+  btn.classList.toggle('btn-needs-action', needed);
+  cancel.classList.toggle('hidden', !needed);
+  warning.classList.toggle('hidden', !needed);
+  tabs.forEach(t => t.classList.toggle('tab-locked', needed));
+}
+
+function shakeSetupWarning() {
+  const warning = document.getElementById('setup-picks-warning');
+  warning.classList.remove('shake');
+  // force reflow so animation restarts
+  void warning.offsetWidth;
+  warning.classList.add('shake');
+}
+
+document.querySelectorAll('.admin-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchAdminTab(tab.dataset.tab));
+});
 
 // ── Import tabs ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.import-tab').forEach(tab => {
@@ -785,6 +1045,7 @@ document.getElementById('btn-paste-import').addEventListener('click', async () =
     result.textContent = `Imported ${data.imported} players.`; result.className = 'import-result';
     textarea.value = '';
     await fetchState();
+    setTeamsNeedSetup(true);
   } catch (e) { result.textContent = 'Import failed: ' + e.message; result.className = 'import-result error'; }
 });
 
@@ -799,12 +1060,13 @@ document.getElementById('btn-import').addEventListener('click', async () => {
     result.textContent = `Imported ${data.imported} players.` + (data.errors.length ? ` Errors: ${data.errors.join('; ')}` : '');
     result.className = 'import-result' + (data.errors.length ? ' error' : '');
     await fetchState();
+    setTeamsNeedSetup(true);
   } catch (e) { result.textContent = 'Import failed: ' + e.message; result.className = 'import-result error'; }
 });
 
 document.getElementById('btn-clear-players').addEventListener('click', async () => {
   if (!confirm('Delete all players for this draft?')) return;
-  try { await api(API.players, 'clear_all', {}); await fetchState(); }
+  try { await api(API.players, 'clear_all', {}); await fetchState(); setTeamsNeedSetup(true); }
   catch (e) { alert('Error: ' + e.message); }
 });
 
@@ -819,7 +1081,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-window.addEventListener('resize', fitBoardToScreen);
+window.addEventListener('resize', () => { fitBoardToScreen(); renderBoard(); });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {

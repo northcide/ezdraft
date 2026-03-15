@@ -75,6 +75,14 @@
         <span id="draft-selector-badge" class="badge badge-setup hidden"></span>
         <button id="btn-delete-draft" class="btn btn-sm btn-danger-outline hidden">Delete</button>
       </div>
+      <div id="draft-controls-inline" class="draft-controls-inline hidden">
+        <button id="btn-start"        class="btn btn-sm btn-success" disabled>&#9654; Start</button>
+        <button id="btn-restart"      class="btn btn-sm btn-success hidden">&#9654; Restart</button>
+        <button id="btn-pause"        class="btn btn-sm btn-warning hidden">&#9646;&#9646; Pause</button>
+        <button id="btn-resume"       class="btn btn-sm btn-success hidden">&#9654; Resume</button>
+        <button id="btn-end"          class="btn btn-sm btn-danger" disabled>&#9646; End</button>
+        <button id="btn-autopick-now" class="btn btn-sm btn-secondary hidden">&#9889; Auto-pick</button>
+      </div>
       <div class="draft-selector-right">
         <!-- Inline new draft form, hidden by default -->
         <div id="new-draft-inline" class="new-draft-inline hidden">
@@ -89,85 +97,98 @@
     <!-- Draft Content (shown when a draft is selected) -->
     <div id="draft-content" class="draft-content hidden">
 
-      <div class="admin-sections">
-
-        <!-- Draft Settings -->
-        <section class="admin-section">
-          <h3>Settings</h3>
-          <div class="settings-rows">
-            <div class="admin-row">
-              <label class="settings-label">Name</label>
-              <input type="text" id="setting-draft-name" class="input-sm" style="width:150px">
-            </div>
-            <div class="admin-row">
-              <label>Rounds <input type="number" id="setting-rounds" min="1" max="30" value="10" class="input-sm input-num"></label>
-              <label>Timer (min) <input type="number" id="setting-timer" min="0" max="30" value="2" class="input-sm input-num"></label>
-              <label class="label-check"><input type="checkbox" id="setting-autopick" checked> Auto-pick</label>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="admin-row">
-              <label class="settings-label">Coach Access Name</label>
-              <input type="text" id="setting-coach-name" class="input-sm" style="width:150px" placeholder="e.g. Majors Coaches">
-            </div>
-            <div class="admin-row">
-              <label class="settings-label">Coach PIN</label>
-              <input type="text" id="setting-coach-pin" class="input-sm" style="width:150px" placeholder="e.g. majors2026">
-            </div>
-          </div>
-          <div class="admin-row" style="margin-top:10px">
-            <button id="btn-save-settings" class="btn btn-sm btn-secondary">Save Settings</button>
-            <button id="btn-setup-picks" class="btn btn-primary btn-sm">Setup Pick Order</button>
-          </div>
-        </section>
-
-        <!-- Teams -->
-        <section class="admin-section">
-          <h3>Teams</h3>
-          <div id="team-list" class="team-list"></div>
-          <div class="admin-row">
-            <input type="text" id="new-team-name" placeholder="Team name" class="input-sm">
-            <button id="btn-add-team" class="btn btn-sm btn-primary">+ Add Team</button>
-          </div>
-        </section>
-
-        <!-- Import Players -->
-        <section class="admin-section admin-section-wide">
-          <h3>Import Players</h3>
-          <div class="import-tabs">
-            <button class="import-tab active" data-tab="paste">Paste List</button>
-            <button class="import-tab" data-tab="csv">CSV File</button>
-          </div>
-          <div id="import-tab-paste" class="import-tab-panel">
-            <p class="help-text">One name per line &#8212; order determines ranking (line 1 = rank 1).</p>
-            <textarea id="paste-names" class="paste-textarea" placeholder="John Smith&#10;Jane Doe&#10;Mike Johnson&#10;..."></textarea>
-            <div class="admin-row">
-              <button id="btn-paste-import" class="btn btn-primary">Import List</button>
-              <button id="btn-clear-players" class="btn btn-danger-outline">Clear All Players</button>
-            </div>
-          </div>
-          <div id="import-tab-csv" class="import-tab-panel hidden">
-            <p class="help-text">CSV columns: <code>name, rank, position, age, coaches_kid</code></p>
-            <div class="admin-row">
-              <input type="file" id="csv-file" accept=".csv">
-              <button id="btn-import" class="btn btn-primary">Import CSV</button>
-            </div>
-          </div>
-          <div id="import-result" class="import-result"></div>
-        </section>
-
-        <!-- Draft Controls -->
-        <section class="admin-section" id="draft-controls-section">
-          <h3>Controls</h3>
-          <div class="admin-row">
-            <button id="btn-start" class="btn btn-success" disabled>&#9654; Start</button>
-            <button id="btn-pause" class="btn btn-warning hidden">&#9646;&#9646; Pause</button>
-            <button id="btn-resume" class="btn btn-success hidden">&#9654; Resume</button>
-            <button id="btn-end" class="btn btn-danger" disabled>&#9646; End Draft</button>
-            <button id="btn-autopick-now" class="btn btn-secondary hidden">&#9889; Auto-pick Now</button>
-          </div>
-        </section>
-
+      <!-- Tab Navigation -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="settings">1. Settings</button>
+        <button class="admin-tab" data-tab="teams">2. Teams</button>
+        <button class="admin-tab" data-tab="players">3. Players</button>
+        <button class="admin-tab" data-tab="controls">&#9888; Danger Zone</button>
       </div>
+
+      <!-- Settings Tab -->
+      <div id="admin-tab-settings" class="admin-tab-panel">
+        <div class="tab-field-row">
+          <div class="tab-field-group">
+            <label class="tab-label">Draft Name</label>
+            <input type="text" id="setting-draft-name" class="input-sm" style="width:200px">
+          </div>
+          <div class="tab-field-group">
+            <label class="tab-label">Timer (min)</label>
+            <input type="number" id="setting-timer" min="0" max="30" value="2" class="input-sm input-num">
+          </div>
+          <div class="tab-field-group">
+            <label class="tab-label">&nbsp;</label>
+            <label class="label-check"><input type="checkbox" id="setting-autopick" checked> Auto-pick on expire</label>
+          </div>
+        </div>
+        <div class="tab-divider"></div>
+        <div class="tab-field-row">
+          <div class="tab-field-group">
+            <label class="tab-label">Coach Access Name</label>
+            <input type="text" id="setting-coach-name" class="input-sm" style="width:200px" placeholder="e.g. Majors Coaches">
+          </div>
+          <div class="tab-field-group">
+            <label class="tab-label">Coach PIN</label>
+            <input type="text" id="setting-coach-pin" class="input-sm" style="width:160px" placeholder="e.g. majors2026">
+          </div>
+        </div>
+        <div class="admin-row" style="margin-top:14px">
+          <button id="btn-save-settings" class="btn btn-secondary">Save Settings</button>
+        </div>
+      </div>
+
+      <!-- Teams Tab -->
+      <div id="admin-tab-teams" class="admin-tab-panel hidden">
+        <div id="team-list" class="team-list" style="max-height:220px"></div>
+        <div class="admin-row" style="margin-top:10px">
+          <input type="text" id="new-team-name" placeholder="Team name" class="input-sm">
+          <button id="btn-add-team" class="btn btn-sm btn-primary">+ Add Team</button>
+        </div>
+      </div>
+
+      <!-- Players Tab -->
+      <div id="admin-tab-players" class="admin-tab-panel hidden">
+        <div class="import-tabs">
+          <button class="import-tab active" data-tab="paste">Paste List</button>
+          <button class="import-tab" data-tab="csv">CSV File</button>
+        </div>
+        <div id="import-tab-paste" class="import-tab-panel">
+          <p class="help-text">One name per line &#8212; order determines ranking (line 1 = rank 1).</p>
+          <textarea id="paste-names" class="paste-textarea" placeholder="John Smith&#10;Jane Doe&#10;Mike Johnson&#10;..."></textarea>
+          <div class="admin-row">
+            <button id="btn-paste-import" class="btn btn-primary">Import List</button>
+            <button id="btn-clear-players" class="btn btn-danger-outline">Clear All Players</button>
+          </div>
+        </div>
+        <div id="import-tab-csv" class="import-tab-panel hidden">
+          <p class="help-text">CSV columns: <code>name, rank, position, age, coaches_kid</code></p>
+          <div class="admin-row">
+            <input type="file" id="csv-file" accept=".csv">
+            <button id="btn-import" class="btn btn-primary">Import CSV</button>
+          </div>
+        </div>
+        <div id="import-result" class="import-result"></div>
+        <div class="tab-divider"></div>
+        <div id="setup-picks-warning" class="setup-picks-warning hidden">
+          &#9888; Teams or players changed &mdash; update the pick order before starting.
+        </div>
+        <div class="admin-row">
+          <button id="btn-setup-picks" class="btn btn-primary">&#9654; Setup Pick Order</button>
+          <button id="btn-setup-picks-cancel" class="btn btn-secondary hidden">Cancel</button>
+          <span class="help-text" style="margin:0">Calculates rounds from player count &divide; teams, then builds the snake draft order.</span>
+        </div>
+      </div>
+
+      <!-- Danger Zone Tab -->
+      <div id="admin-tab-controls" class="admin-tab-panel hidden">
+        <div class="controls-group">
+          <div class="admin-row">
+            <button id="btn-reset-picks" class="btn btn-danger-outline">&#8635; Reset All Picks</button>
+          </div>
+          <p class="help-text" style="margin-top:6px">Clears all player assignments and returns the draft to setup. Teams and players are kept.</p>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -179,7 +200,10 @@
     <aside id="rankings-panel">
       <div id="rankings-view">
         <div class="rankings-header">
-          <input type="text" id="filter-search" class="search-input" placeholder="Search players&#8230;" autocomplete="off">
+          <div class="rankings-header-row">
+            <input type="text" id="filter-search" class="search-input" placeholder="Search players&#8230;" autocomplete="off">
+            <button id="btn-toggle-reorder" class="btn btn-sm btn-secondary" title="Reorder players">&#8693; Reorder</button>
+          </div>
           <label class="filter-check">
             <input type="checkbox" id="filter-available" checked> Available only
           </label>
@@ -192,6 +216,7 @@
         <div class="rankings-header reorder-header">
           <span class="reorder-title">Drag to reorder</span>
           <span id="reorder-status" class="reorder-status"></span>
+          <button id="btn-close-reorder" class="btn btn-sm btn-secondary">&#10005; Done</button>
         </div>
         <div id="player-reorder-list-sidebar" class="player-reorder-list-sidebar"></div>
       </div>
