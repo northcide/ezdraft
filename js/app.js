@@ -444,6 +444,23 @@ function updateTimerDisplay(seconds) {
   const hasTimer = !!(state.draft?.auto_pick_enabled && state.draft?.timer_end);
   const color    = timerColor(hasTimer ? seconds : null, state.timerMax);
 
+  // Topbar countdown text (bar is hidden via CSS)
+  const display   = document.getElementById('timer-display');
+  const countdown = document.getElementById('timer-countdown');
+  if (display && countdown) {
+    if (hasTimer && seconds !== null) {
+      display.classList.remove('hidden');
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      countdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      countdown.className = 'timer-countdown';
+      if (seconds <= 30) countdown.classList.add('warn');
+      if (seconds <= 10) { countdown.classList.remove('warn'); countdown.classList.add('urgent'); }
+    } else {
+      display.classList.add('hidden');
+    }
+  }
+
   // Update clock cell background + countdown text
   const cell   = document.getElementById('clock-cell');
   const header = document.getElementById('clock-header');

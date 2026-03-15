@@ -89,8 +89,8 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   padding: 0 20px; position: sticky; top: 0; z-index: 100;
   box-shadow: 0 2px 6px rgba(0,0,0,.18);
 }
-/* Timer is now shown inside the board cell; hide the topbar timer */
-#timer-area { display: none; }
+/* Timer bar hidden — countdown text only in topbar */
+#timer-bar-wrap { display: none; }
 .topbar-left { display: flex; align-items: center; gap: 14px; }
 .topbar-center { flex: 1; display: flex; justify-content: center; }
 .topbar-right  { display: flex; align-items: center; gap: 10px; }
