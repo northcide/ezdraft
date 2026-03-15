@@ -14,7 +14,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
 <!-- Login Overlay -->
 <div id="login-overlay" class="login-overlay">
   <div class="login-card">
-    <div class="login-logo">&#9918; EasyDraft</div>
+    <div class="login-logo">EasyDraft</div>
     <div id="login-error" class="login-error hidden"></div>
     <form id="login-form" autocomplete="off">
       <label class="login-label">League / Draft Name</label>
@@ -43,7 +43,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
   <!-- Top Bar -->
   <header id="topbar">
     <div class="topbar-left">
-      <span class="logo">&#9918; EasyDraft</span>
+      <span class="logo">EasyDraft</span>
       <span id="draft-status-badge" class="badge badge-setup">Setup</span>
     </div>
     <div class="topbar-center" id="timer-area">

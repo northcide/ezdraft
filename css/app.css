@@ -88,6 +88,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; position: sticky; top: 0; z-index: 100;
   box-shadow: 0 2px 6px rgba(0,0,0,.18);
+  overflow: hidden;
 }
 .topbar-left { display: flex; align-items: center; gap: 14px; }
 .topbar-center { flex: 1; display: flex; justify-content: center; }
@@ -601,6 +602,21 @@ body.role-coach #rankings-panel { display: none; }
   #rankings-panel { width: 200px; }
   .cell-player { font-size: 13px; }
   .board-table th { font-size: 12px; }
+}
+@media (max-width: 767px) {
+  #topbar {
+    padding: 0 10px;
+    height: auto; min-height: 46px;
+  }
+  .topbar-left  { gap: 8px; }
+  .topbar-right { gap: 6px; }
+  .logo { font-size: 16px; }
+  .topbar-role  { display: none; }  /* verbose on small screens */
+  #topbar .btn  { padding: 5px 10px; font-size: 12px; }
+  #draft-bar    { padding: 5px 10px; gap: 8px; min-height: 40px; }
+  .draft-selector-select { min-width: 130px; font-size: 12px; }
+  .draft-bar-name { font-size: 12px; }
+  .current-pick-label { font-size: 12px; }
 }
 @media (max-width: 600px) {
   .admin-sections { flex-direction: column; }

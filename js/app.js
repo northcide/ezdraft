@@ -118,12 +118,18 @@ async function apiForm(endpoint, action, formData) {
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
+// Uses a setTimeout chain (not setInterval) so polls never stack and each one
+// waits for the previous response before scheduling the next.
 function startPolling() {
   stopPolling();
-  state.pollInterval = setInterval(fetchState, 2000);
+  state.pollInterval = setTimeout(_doPoll, 2000);
 }
 function stopPolling() {
-  if (state.pollInterval) { clearInterval(state.pollInterval); state.pollInterval = null; }
+  if (state.pollInterval) { clearTimeout(state.pollInterval); state.pollInterval = null; }
+}
+async function _doPoll() {
+  state.pollInterval = null;       // cleared before fetch; applyState reschedules
+  await fetchState();              // applyState inside will call startPolling() if needed
 }
 
 async function fetchState() {
@@ -133,8 +139,18 @@ async function fetchState() {
     applyState(data);
   } catch (e) {
     console.warn('Poll error:', e.message);
+    // On error, retry after a short back-off so a blip doesn't kill polling
+    if (state.selectedDraftId) state.pollInterval = setTimeout(_doPoll, 4000);
   }
 }
+
+// Re-sync immediately when the user returns to the tab (fixes mobile backgrounding)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.selectedDraftId) {
+    stopPolling();   // cancel any pending timer
+    fetchState();    // immediate catch-up; applyState will restart polling
+  }
+});
 
 function applyState(data) {
   const prevStatus = state.draft?.status;
@@ -182,11 +198,22 @@ function applyState(data) {
   // Timer
   if (state.draft?.status === 'active') {
     if (!state.timerInterval) startTimer();
-    if (!state.pollInterval)  startPolling();
   } else {
     stopTimer();
     updateTimerDisplay(null);
-    if (state.draft?.status === 'completed') stopPolling();
+  }
+
+  // Polling: coaches need updates in every state (setup→active transition,
+  // paused boards, completed results). Admins only need it when active/paused.
+  const wantsPoll = !!state.draft && (
+    state.draft.status === 'active' ||
+    state.draft.status === 'paused' ||
+    state.role === 'coach'
+  );
+  if (wantsPoll) {
+    if (!state.pollInterval) startPolling();
+  } else {
+    stopPolling();
   }
 }
 
@@ -1184,12 +1211,7 @@ window.addEventListener('resize', () => { fitBoardToScreen(); renderBoard(); });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  await fetchState();
-  if (state.draft?.status === 'active') {
-    state.timerMax = state.draft.timer_minutes * 60;
-    startPolling();
-    startTimer();
-  }
+  await fetchState(); // applyState inside handles polling and timer startup
 }
 
 (async () => {
