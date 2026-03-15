@@ -132,6 +132,23 @@ try {
         dbSave($db);
         jsonResponse(['imported' => $imported, 'errors' => $errors]);
 
+    } elseif ($action === 'reorder') {
+        // Accept ordered array of ids: [3, 1, 5, 2, ...] — index+1 becomes the new rank
+        $data = getInput();
+        if (!is_array($data)) jsonError('Expected array of ids');
+        $rankMap = [];
+        foreach ($data as $pos => $id) {
+            $rankMap[(int)$id] = $pos + 1;
+        }
+        foreach ($db['players'] as &$p) {
+            if (isset($rankMap[$p['id']])) {
+                $p['rank'] = $rankMap[$p['id']];
+            }
+        }
+        unset($p);
+        dbSave($db);
+        jsonResponse(['success' => true]);
+
     } elseif ($action === 'bulk_names') {
         // Accept {names: ["Name 1", "Name 2", ...], replace: true}
         // Ranking is determined by position in the array (index 0 = rank 1)

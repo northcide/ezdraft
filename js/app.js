@@ -74,6 +74,7 @@ function applyState(data) {
   renderRankings();
   renderBoard();
   renderTeamList();
+  renderReorderList();
   updateControls();
   updateStatusBadge();
   updateCurrentPickLabel();
@@ -429,6 +430,88 @@ async function onCellDrop(e, pickNum) {
   }
 
   state.dragPlayerId = null;
+}
+
+// ── Player Reorder ────────────────────────────────────────────────────────────
+let reorderDragSrcIdx = null;
+
+function renderReorderList() {
+  const list = document.getElementById('player-reorder-list');
+  if (!list) return;
+  const players = [...state.players].sort((a, b) => a.rank - b.rank);
+
+  if (players.length === 0) {
+    list.innerHTML = '<div class="reorder-empty">No players loaded.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  players.forEach((p, idx) => {
+    const row = document.createElement('div');
+    row.className = 'reorder-item';
+    row.draggable = true;
+    row.dataset.playerId = p.id;
+    row.dataset.idx = idx;
+
+    row.innerHTML = `
+      <span class="reorder-handle" title="Drag to reorder">&#9776;</span>
+      <span class="reorder-rank">${idx + 1}</span>
+      <span class="reorder-name">${esc(p.name)}</span>
+    `;
+
+    row.addEventListener('dragstart', e => {
+      reorderDragSrcIdx = idx;
+      row.classList.add('reorder-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('reorder-dragging');
+      list.querySelectorAll('.reorder-item').forEach(r => r.classList.remove('reorder-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.reorder-item').forEach(r => r.classList.remove('reorder-over'));
+      row.classList.add('reorder-over');
+    });
+    row.addEventListener('drop', async e => {
+      e.preventDefault();
+      row.classList.remove('reorder-over');
+      const destIdx = Number(row.dataset.idx);
+      if (reorderDragSrcIdx === null || reorderDragSrcIdx === destIdx) return;
+
+      // Reorder in place
+      const sorted = [...state.players].sort((a, b) => a.rank - b.rank);
+      const [moved] = sorted.splice(reorderDragSrcIdx, 1);
+      sorted.splice(destIdx, 0, moved);
+
+      // Optimistically update state and re-render immediately
+      sorted.forEach((p, i) => { p.rank = i + 1; });
+      state.players = sorted;
+      renderReorderList();
+      renderRankings();
+
+      // Persist
+      try {
+        const ids = sorted.map(p => p.id);
+        await api(API.players, 'reorder', ids);
+        showReorderStatus('Saved');
+      } catch (e) {
+        showReorderStatus('Save failed', true);
+      }
+      reorderDragSrcIdx = null;
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function showReorderStatus(msg, isError = false) {
+  const el = document.getElementById('reorder-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'reorder-status' + (isError ? ' error' : '');
+  setTimeout(() => { el.textContent = ''; }, 2000);
 }
 
 // ── Team Management ───────────────────────────────────────────────────────────

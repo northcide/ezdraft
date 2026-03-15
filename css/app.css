@@ -167,6 +167,41 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .import-result       { font-size: 12px; margin-top: 7px; color: var(--accent2); font-weight: 600; }
 .import-result.error { color: var(--danger); }
 
+/* Player reorder */
+.admin-section-rankings { min-width: 240px; max-width: 280px; }
+
+.player-reorder-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.reorder-empty { padding: 10px 12px; font-size: 12px; color: var(--text3); font-style: italic; }
+
+.reorder-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  transition: background .1s;
+  font-size: 13px;
+}
+.reorder-item:last-child { border-bottom: none; }
+.reorder-item:hover      { background: #f0f4ff; }
+.reorder-item.reorder-dragging { opacity: .4; }
+.reorder-item.reorder-over    { background: #dbeafe; border-top: 2px solid var(--accent); }
+
+.reorder-handle { color: var(--text3); font-size: 13px; cursor: grab; flex-shrink: 0; }
+.reorder-rank   { min-width: 22px; font-size: 11px; font-weight: 700; color: var(--text3); text-align: right; flex-shrink: 0; }
+.reorder-name   { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.reorder-status       { font-size: 11px; color: var(--accent2); font-weight: 600; margin-left: 6px; }
+.reorder-status.error { color: var(--danger); }
+
 /* ── Main Content ─────────────────────────────────────────────────────────── */
 #main-content {
   display: flex;
