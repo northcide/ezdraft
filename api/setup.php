@@ -16,10 +16,9 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $pass     = trim($_POST['db_pass']     ?? '');
     $league   = trim($_POST['league_name'] ?? 'My League');
     $adminPin = trim($_POST['admin_pin']   ?? '');
-    $coachPin = trim($_POST['coach_pin']   ?? '');
 
-    if (!$user || !$adminPin || !$coachPin) {
-        $error = 'DB user, admin PIN, and coach PIN are all required.';
+    if (!$user || !$adminPin) {
+        $error = 'DB username and admin PIN are required.';
     } else {
         try {
             // Connect without DB name first to create it
@@ -54,7 +53,6 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO settings (`key`, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)");
             $stmt->execute(['league_name', $league]);
             $stmt->execute(['admin_pin',   $adminPin]);
-            $stmt->execute(['coach_pin',   $coachPin]);
 
             $success = "Setup complete! <strong>Delete or restrict access to setup.php.</strong>";
         } catch (Exception $e) {
@@ -110,8 +108,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <input name="league_name" value="<?= htmlspecialchars($_POST['league_name'] ?? 'My League') ?>" placeholder="Springfield Little League">
     <label>Admin PIN <small style="font-weight:400;text-transform:none">(full control)</small></label>
     <input type="password" name="admin_pin" placeholder="Choose a secure PIN">
-    <label>Coach PIN <small style="font-weight:400;text-transform:none">(view-only)</small></label>
-    <input type="password" name="coach_pin" placeholder="Share with coaches">
+    <p style="margin-top:10px;font-size:12px;color:#666">Coach PINs are set per-draft inside the app after setup.</p>
 
     <button type="submit">Run Setup</button>
   </form>

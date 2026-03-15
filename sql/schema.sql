@@ -70,5 +70,4 @@ CREATE TABLE IF NOT EXISTS picks (
 
 INSERT IGNORE INTO settings (`key`, value) VALUES
   ('league_name', 'My League'),
-  ('admin_pin',   'admin1234'),
-  ('coach_pin',   '1234');
+  ('admin_pin',   'admin1234');
