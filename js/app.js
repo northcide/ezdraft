@@ -308,11 +308,8 @@ function renderBoard() {
   for (let r = 1; r <= rounds; r++) {
     const tr = document.createElement('tr');
     const tdRound = document.createElement('td');
-    tdRound.className = 'board-cell';
+    tdRound.className = 'board-cell round-cell';
     tdRound.textContent = r;
-    tdRound.style.color = 'var(--text3)';
-    tdRound.style.textAlign = 'center';
-    tdRound.style.fontSize = '11px';
     tr.appendChild(tdRound);
 
     // In round r, picks go from (r-1)*n+1 to r*n
@@ -358,11 +355,8 @@ function renderBoard() {
         td.innerHTML = `
           <span class="cell-pick-num">#${pick.pick_num}</span>
           <span class="cell-player">${esc(pick.player_name)}</span>
-          <span class="cell-rank">Rank ${pick.player_rank}</span>
-          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}
-          ${isPreassigned ? '<span class="cell-pre">pre-assigned</span>' : ''}
+          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto-pick</span>' : ''}
         `;
-        // Right-click to clear
         td.title = 'Right-click to clear pick';
         td.addEventListener('contextmenu', e => {
           e.preventDefault();
@@ -371,13 +365,9 @@ function renderBoard() {
       } else {
         td.innerHTML = `
           <span class="cell-pick-num">#${pick.pick_num}</span>
-          <span class="cell-empty">${isCurrent ? '← ON CLOCK' : ''}</span>
+          <span class="cell-empty">${isCurrent ? 'ON THE CLOCK' : ''}</span>
         `;
-        // Click to pick from rankings (only current pick in active draft)
-        if (isCurrent) {
-          td.style.cursor = 'pointer';
-          td.title = 'Click a player in the rankings to pick, or drag here';
-        }
+        if (isCurrent) td.title = 'Click a player in the rankings to pick, or drag here';
       }
 
       tr.appendChild(td);
