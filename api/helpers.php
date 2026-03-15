@@ -53,6 +53,20 @@ function requireAdmin(): void {
     }
 }
 
+// ── Draft context ─────────────────────────────────────────────────────────────
+// Returns the draft_id the current user is working in.
+// Admin: uses session selected_draft_id if set.
+// Coach or admin fallback: the live (active/paused) draft.
+function contextDraftId(PDO $db): int {
+    if (currentRole() === 'admin' && !empty($_SESSION['selected_draft_id'])) {
+        return (int)$_SESSION['selected_draft_id'];
+    }
+    $stmt = $db->query("SELECT id FROM drafts WHERE status IN ('active','paused') ORDER BY updated_at DESC LIMIT 1");
+    $row = $stmt->fetch();
+    if ($row) return (int)$row['id'];
+    jsonError('No draft selected. Please select or create a draft.', 400);
+}
+
 // ── Response helpers ──────────────────────────────────────────────────────────
 function jsonResponse(mixed $data, int $status = 200): void {
     http_response_code($status);

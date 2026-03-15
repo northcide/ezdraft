@@ -10,18 +10,20 @@ const API = {
 
 // ── State ────────────────────────────────────────────────────────────────────
 const state = {
-  draft:        null,
-  picks:        [],
-  teams:        [],
-  players:      [],
-  role:         '',   // 'admin' | 'coach'
-  leagueName:   '',
-  serverOffset: 0,
-  pollInterval: null,
-  timerInterval: null,
-  timerMax: 0,
+  draft:           null,
+  picks:           [],
+  teams:           [],
+  players:         [],
+  allDrafts:       [],
+  selectedDraftId: null,
+  role:            '',   // 'admin' | 'coach'
+  leagueName:      '',
+  serverOffset:    0,
+  pollInterval:    null,
+  timerInterval:   null,
+  timerMax:        0,
   announcementTimeout: null,
-  dragPlayerId: null,
+  dragPlayerId:    null,
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -128,15 +130,46 @@ async function fetchState() {
 
 function applyState(data) {
   const prevDraftStatus = state.draft?.status;
-  state.draft   = data.draft;
-  state.picks   = data.picks || [];
-  state.teams   = data.teams || [];
-  state.players = data.players || [];
+  state.draft          = data.draft;
+  state.picks          = data.picks || [];
+  state.teams          = data.teams || [];
+  state.players        = data.players || [];
+  state.allDrafts      = data.allDrafts || state.allDrafts || [];
+  state.selectedDraftId = data.selectedDraftId ?? state.selectedDraftId;
   if (data.role) state.role = data.role;
 
   // Keep timerMax in sync with configured pick duration
   if (state.draft) state.timerMax = state.draft.timer_minutes * 60;
 
+  // Update board header with draft name
+  const boardName = document.getElementById('board-draft-name');
+  if (boardName) {
+    boardName.textContent = state.draft ? state.draft.name + ' — Draft Board' : 'Draft Board';
+  }
+
+  // Update section labels with current draft name
+  const draftLabel = state.draft ? state.draft.name : '';
+  const labelEl = text => {
+    const el = document.getElementById(text);
+    if (el) el.textContent = draftLabel;
+  };
+  labelEl('teams-draft-label');
+  labelEl('settings-draft-label');
+  labelEl('players-draft-label');
+
+  // Populate settings form with current draft values
+  if (state.draft) {
+    const nameInput = document.getElementById('setting-draft-name');
+    const roundsInput = document.getElementById('setting-rounds');
+    const timerInput = document.getElementById('setting-timer');
+    const autopickInput = document.getElementById('setting-autopick');
+    if (nameInput)    nameInput.value    = state.draft.name;
+    if (roundsInput)  roundsInput.value  = state.draft.total_rounds;
+    if (timerInput)   timerInput.value   = state.draft.timer_minutes;
+    if (autopickInput) autopickInput.checked = !!Number(state.draft.auto_pick_enabled);
+  }
+
+  renderDraftMgmtList();
   renderRankings();
   renderBoard();
   renderTeamList();
@@ -257,6 +290,73 @@ document.getElementById('announcement').addEventListener('click', () => {
   setTimeout(() => el.classList.add('hidden'), 500);
 });
 
+// ── Draft Management ──────────────────────────────────────────────────────────
+function renderDraftMgmtList() {
+  const list = document.getElementById('draft-mgmt-list');
+  if (!list) return;
+  const drafts = state.allDrafts || [];
+
+  if (drafts.length === 0) {
+    list.innerHTML = '<div class="empty-state" style="padding:8px;text-align:left">No drafts yet. Create one below.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  drafts.forEach(d => {
+    const isSelected = d.id == state.selectedDraftId;
+    const item = document.createElement('div');
+    item.className = 'draft-mgmt-item' + (isSelected ? ' is-selected' : '');
+
+    let dates = `Created: ${fmtDate(d.created_at)}`;
+    if (d.started_at)   dates += ` · Started: ${fmtDate(d.started_at)}`;
+    if (d.completed_at) dates += ` · Completed: ${fmtDate(d.completed_at)}`;
+
+    item.innerHTML = `
+      <div class="draft-item-info">
+        <div class="draft-item-name">${esc(d.name)}</div>
+        <div class="draft-item-meta">
+          <span class="badge badge-${d.status}">${d.status}</span>
+          <span class="draft-item-dates">${dates}</span>
+        </div>
+      </div>
+      <div class="draft-item-actions">
+        <button class="btn btn-sm ${isSelected ? 'btn-secondary' : 'btn-primary'} btn-select-draft" data-id="${d.id}">${isSelected ? '✓ Selected' : 'Select'}</button>
+        <button class="btn btn-sm btn-danger-outline btn-delete-draft" data-id="${d.id}" data-name="${esc(d.name)}" ${d.status === 'active' ? 'disabled' : ''}>✕</button>
+      </div>
+    `;
+
+    item.querySelector('.btn-select-draft').addEventListener('click', () => selectDraft(d.id));
+    item.querySelector('.btn-delete-draft').addEventListener('click', () => deleteDraft(d.id, d.name));
+
+    list.appendChild(item);
+  });
+}
+
+async function selectDraft(id) {
+  try {
+    const data = await api(API.drafts, 'select', { id });
+    applyState(data);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function deleteDraft(id, name) {
+  if (!confirm(`Delete draft "${name}"? This cannot be undone.`)) return;
+  try {
+    const data = await api(API.drafts, 'delete', { id });
+    applyState(data);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 // ── Rankings ──────────────────────────────────────────────────────────────────
 function renderRankings() {
   const list        = document.getElementById('rankings-list');
@@ -319,7 +419,7 @@ async function makePick(pickNum, playerId, player) {
 function renderBoard() {
   const wrap = document.getElementById('board-wrap');
   if (!state.draft || state.teams.length === 0 || state.picks.length === 0) {
-    wrap.innerHTML = '<div class="empty-state">Create a draft to see the board.</div>';
+    wrap.innerHTML = '<div class="empty-state">Select a draft to see the board.</div>';
     return;
   }
 
@@ -611,12 +711,14 @@ async function addTeam() {
   const input = document.getElementById('new-team-name');
   const name = input.value.trim();
   if (!name) return;
+  if (!state.selectedDraftId && !state.draft) {
+    alert('Select or create a draft first.');
+    return;
+  }
   try {
     await api(API.teams, 'create', { name });
     input.value = '';
-    const data = await api(API.teams, 'list');
-    state.teams = data;
-    renderTeamList();
+    await fetchState();
   } catch (e) {
     alert('Error: ' + e.message);
   }
@@ -625,9 +727,7 @@ async function addTeam() {
 async function deleteTeam(id) {
   try {
     await api(API.teams, 'delete', { id });
-    const data = await api(API.teams, 'list');
-    state.teams = data;
-    renderTeamList();
+    await fetchState();
   } catch (e) {
     alert('Error: ' + e.message);
   }
@@ -642,7 +742,8 @@ function updateControls() {
   const btnEnd        = document.getElementById('btn-end');
   const btnAutopick   = document.getElementById('btn-autopick-now');
 
-  btnStart.disabled = !(status === 'setup');
+  // Start is enabled only when a draft is in setup state with picks built
+  btnStart.disabled = !(status === 'setup' && state.picks.length > 0);
   btnEnd.disabled   = !(status === 'active' || status === 'paused');
 
   btnPause.classList.toggle('hidden', status !== 'active');
@@ -675,8 +776,7 @@ document.getElementById('btn-admin').addEventListener('click', () => {
   const rankingsView = document.getElementById('rankings-view');
   const reorderView  = document.getElementById('reorder-view');
 
-  const opening = adminPanel.classList.toggle('hidden');
-  // classList.toggle returns true when the class was ADDED (panel hidden), false when removed (panel shown)
+  adminPanel.classList.toggle('hidden');
   const adminOpen = !adminPanel.classList.contains('hidden');
 
   rankingsView.classList.toggle('hidden', adminOpen);
@@ -690,15 +790,49 @@ document.getElementById('new-team-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') addTeam();
 });
 
-document.getElementById('btn-create-draft').addEventListener('click', async () => {
+// New Draft
+document.getElementById('btn-new-draft').addEventListener('click', async () => {
+  const name = document.getElementById('new-draft-name').value.trim();
+  if (!name) { alert('Enter a draft name'); return; }
+  try {
+    const data = await api(API.drafts, 'create', {
+      name,
+      total_rounds: parseInt(document.getElementById('setting-rounds').value, 10) || 10,
+      timer_minutes: parseInt(document.getElementById('setting-timer').value, 10) || 2,
+      auto_pick_enabled: document.getElementById('setting-autopick').checked ? 1 : 0,
+    });
+    document.getElementById('new-draft-name').value = '';
+    applyState(data);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+});
+
+// Save Settings
+document.getElementById('btn-save-settings').addEventListener('click', async () => {
+  if (!state.draft) { alert('Select a draft first.'); return; }
+  const name   = document.getElementById('setting-draft-name').value.trim();
   const rounds = parseInt(document.getElementById('setting-rounds').value, 10);
   const timer  = parseInt(document.getElementById('setting-timer').value, 10);
   const auto   = document.getElementById('setting-autopick').checked ? 1 : 0;
   try {
-    await api(API.drafts, 'create', { total_rounds: rounds, timer_minutes: timer, auto_pick_enabled: auto });
-    state.timerMax = timer * 60;
-    await fetchState();
-  } catch (e) {
+    const data = await api(API.drafts, 'update_settings', {
+      name, total_rounds: rounds, timer_minutes: timer, auto_pick_enabled: auto,
+    });
+    applyState(data);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+});
+
+// Setup Pick Order
+document.getElementById('btn-setup-picks').addEventListener('click', async () => {
+  if (!state.draft) { alert('Select a draft first.'); return; }
+  if (!confirm('Build pick order? This will reset any pre-assignments.')) return;
+  try {
+    const data = await api(API.drafts, 'setup_picks', {});
+    applyState(data);
+  } catch(e) {
     alert('Error: ' + e.message);
   }
 });
@@ -841,14 +975,6 @@ window.addEventListener('resize', fitBoardToScreen);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  if (state.role === 'admin') {
-    try {
-      const teams = await api(API.teams, 'list');
-      state.teams = teams;
-      renderTeamList();
-    } catch (_) {}
-  }
-
   await fetchState();
 
   if (state.draft?.status === 'active') {

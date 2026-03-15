@@ -7,8 +7,25 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS drafts (
+  id                      INT AUTO_INCREMENT PRIMARY KEY,
+  name                    VARCHAR(255) NOT NULL DEFAULT 'Draft',
+  status                  ENUM('setup','active','paused','completed') NOT NULL DEFAULT 'setup',
+  total_rounds            INT NOT NULL DEFAULT 10,
+  timer_minutes           INT NOT NULL DEFAULT 2,
+  auto_pick_enabled       TINYINT(1) NOT NULL DEFAULT 1,
+  current_pick_num        INT NOT NULL DEFAULT 1,
+  timer_end               DATETIME DEFAULT NULL,
+  timer_remaining_seconds INT DEFAULT NULL,
+  started_at              DATETIME DEFAULT NULL,
+  completed_at            DATETIME DEFAULT NULL,
+  created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS players (
   id              INT AUTO_INCREMENT PRIMARY KEY,
+  draft_id        INT NOT NULL,
   name            VARCHAR(255) NOT NULL,
   `rank`          INT NOT NULL,
   position        VARCHAR(50) DEFAULT NULL,
@@ -16,28 +33,18 @@ CREATE TABLE IF NOT EXISTS players (
   age             INT DEFAULT NULL,
   notes           TEXT DEFAULT NULL,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_rank (`rank`)
+  INDEX idx_draft_rank (draft_id, `rank`),
+  FOREIGN KEY (draft_id) REFERENCES drafts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS teams (
   id           INT AUTO_INCREMENT PRIMARY KEY,
+  draft_id     INT NOT NULL,
   name         VARCHAR(255) NOT NULL,
   draft_order  INT NOT NULL,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_draft_order (draft_order)
-);
-
-CREATE TABLE IF NOT EXISTS drafts (
-  id                      INT AUTO_INCREMENT PRIMARY KEY,
-  status                  ENUM('setup','active','paused','completed') NOT NULL DEFAULT 'setup',
-  total_rounds            INT NOT NULL DEFAULT 0,
-  timer_minutes           INT NOT NULL DEFAULT 2,
-  auto_pick_enabled       TINYINT(1) NOT NULL DEFAULT 1,
-  current_pick_num        INT NOT NULL DEFAULT 1,
-  timer_end               DATETIME DEFAULT NULL,
-  timer_remaining_seconds INT DEFAULT NULL,
-  created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  INDEX idx_draft_order (draft_id, draft_order),
+  FOREIGN KEY (draft_id) REFERENCES drafts(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS picks (
@@ -59,7 +66,6 @@ CREATE TABLE IF NOT EXISTS picks (
   FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
 );
 
--- Default settings (safe to re-run; only inserts if key doesn't exist)
 INSERT IGNORE INTO settings (`key`, value) VALUES
   ('league_name', 'My League'),
   ('admin_pin',   'admin1234'),

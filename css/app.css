@@ -534,3 +534,33 @@ body.role-coach #rankings-panel { display: none; }
   .admin-sections { flex-direction: column; }
   .announcement-player { font-size: 44px; }
 }
+
+/* ── Draft Management ─────────────────────────────────────────────────────── */
+.admin-section-drafts { min-width: 420px; }
+
+.draft-mgmt-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 200px; overflow-y: auto; margin-bottom: 8px;
+}
+
+.draft-mgmt-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg3);
+  transition: background .1s;
+}
+.draft-mgmt-item.is-selected {
+  background: #eff6ff; border-color: var(--accent);
+}
+
+.draft-item-info  { flex: 1; min-width: 0; }
+.draft-item-name  { font-size: 13px; font-weight: 700; color: var(--text); }
+.draft-item-meta  { display: flex; align-items: center; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+.draft-item-dates { font-size: 11px; color: var(--text3); }
+.draft-item-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
+.section-draft-label {
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  text-transform: none; letter-spacing: 0;
+  background: #eff6ff; border-radius: 4px; padding: 1px 6px;
+}

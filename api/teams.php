@@ -8,15 +8,21 @@ try {
     $db = getDB();
 
     if ($action === 'list') {
-        jsonResponse($db->query('SELECT * FROM teams ORDER BY draft_order ASC')->fetchAll());
+        $draftId = contextDraftId($db);
+        $stmt    = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
+        $stmt->execute([$draftId]);
+        jsonResponse($stmt->fetchAll());
 
     } elseif ($action === 'create') {
         requireAdmin();
-        $data = getInput();
+        $draftId  = contextDraftId($db);
+        $data     = getInput();
         if (empty($data['name'])) jsonError('name is required');
-        $maxOrder = (int)$db->query('SELECT COALESCE(MAX(draft_order),0) FROM teams')->fetchColumn();
-        $stmt     = $db->prepare('INSERT INTO teams (name, draft_order) VALUES (?, ?)');
-        $stmt->execute([$data['name'], $maxOrder + 1]);
+        $maxStmt  = $db->prepare('SELECT COALESCE(MAX(draft_order),0) FROM teams WHERE draft_id=?');
+        $maxStmt->execute([$draftId]);
+        $maxOrder = (int)$maxStmt->fetchColumn();
+        $stmt     = $db->prepare('INSERT INTO teams (draft_id, name, draft_order) VALUES (?, ?, ?)');
+        $stmt->execute([$draftId, $data['name'], $maxOrder + 1]);
         $id   = $db->lastInsertId();
         $stmt = $db->prepare('SELECT * FROM teams WHERE id=?');
         $stmt->execute([$id]);
@@ -51,7 +57,8 @@ try {
 
     } elseif ($action === 'clear_all') {
         requireAdmin();
-        $db->exec('DELETE FROM teams');
+        $draftId = contextDraftId($db);
+        $db->prepare('DELETE FROM teams WHERE draft_id=?')->execute([$draftId]);
         jsonResponse(['success' => true]);
 
     } else {

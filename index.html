@@ -61,9 +61,19 @@
   <div id="admin-panel" class="admin-panel hidden">
     <div class="admin-sections">
 
+      <!-- Draft Management -->
+      <section class="admin-section admin-section-drafts admin-only">
+        <h3>Drafts</h3>
+        <div id="draft-mgmt-list" class="draft-mgmt-list"></div>
+        <div class="admin-row" id="new-draft-row">
+          <input type="text" id="new-draft-name" placeholder="Draft name (e.g. Majors)" class="input-sm" style="width:160px">
+          <button id="btn-new-draft" class="btn btn-sm btn-primary">+ New Draft</button>
+        </div>
+      </section>
+
       <!-- Teams Section -->
       <section class="admin-section">
-        <h3>Teams</h3>
+        <h3>Teams <span id="teams-draft-label" class="section-draft-label"></span></h3>
         <div id="team-list" class="team-list"></div>
         <div class="admin-row">
           <input type="text" id="new-team-name" placeholder="Team name" class="input-sm">
@@ -73,7 +83,10 @@
 
       <!-- Draft Settings -->
       <section class="admin-section">
-        <h3>Draft Settings</h3>
+        <h3>Draft Settings <span id="settings-draft-label" class="section-draft-label"></span></h3>
+        <div class="admin-row">
+          <label>Name: <input type="text" id="setting-draft-name" class="input-sm" style="width:130px" placeholder="Draft name"></label>
+        </div>
         <div class="admin-row">
           <label>Rounds: <input type="number" id="setting-rounds" min="1" max="30" value="10" class="input-sm input-num"></label>
           <label>Timer (min): <input type="number" id="setting-timer" min="0" max="30" value="2" class="input-sm input-num"></label>
@@ -83,7 +96,8 @@
           </label>
         </div>
         <div class="admin-row">
-          <button id="btn-create-draft" class="btn btn-primary">Create Draft</button>
+          <button id="btn-save-settings" class="btn btn-sm btn-secondary">Save Settings</button>
+          <button id="btn-setup-picks" class="btn btn-primary">Setup Pick Order</button>
         </div>
       </section>
 
@@ -101,7 +115,7 @@
 
       <!-- Player Import -->
       <section class="admin-section admin-section-wide">
-        <h3>Import Players</h3>
+        <h3>Import Players <span id="players-draft-label" class="section-draft-label"></span></h3>
         <div class="import-tabs">
           <button class="import-tab active" data-tab="paste">Paste List</button>
           <button class="import-tab" data-tab="csv">CSV File</button>
@@ -163,11 +177,11 @@
     <!-- Right: Draft Board -->
     <main id="board-panel">
       <div class="board-header">
-        <h2>Draft Board</h2>
+        <h2 id="board-draft-name">Draft Board</h2>
         <span id="current-pick-label" class="current-pick-label"></span>
       </div>
       <div id="board-wrap" class="board-wrap">
-        <div class="empty-state">Create a draft to see the board.</div>
+        <div class="empty-state">Select a draft to see the board.</div>
       </div>
     </main>
 

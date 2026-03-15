@@ -8,19 +8,22 @@ try {
     $db = getDB();
 
     if ($action === 'list') {
-        $sql    = 'SELECT * FROM players ORDER BY `rank` ASC';
-        $stmt   = $db->query($sql);
+        $draftId = contextDraftId($db);
+        $stmt    = $db->prepare('SELECT * FROM players WHERE draft_id=? ORDER BY `rank` ASC');
+        $stmt->execute([$draftId]);
         jsonResponse($stmt->fetchAll());
 
     } elseif ($action === 'create') {
         requireAdmin();
-        $data = getInput();
+        $draftId = contextDraftId($db);
+        $data    = getInput();
         if (empty($data['name'])) jsonError('name is required');
         $stmt = $db->prepare(
-            'INSERT INTO players (name, `rank`, position, is_coaches_kid, age, notes)
-             VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
+            $draftId,
             $data['name'],
             (int)($data['rank'] ?? 1),
             $data['position'] ?? null,
@@ -59,7 +62,7 @@ try {
 
     } elseif ($action === 'reorder') {
         requireAdmin();
-        $ids = getInput(); // ordered array of ids
+        $ids = getInput();
         if (!is_array($ids)) jsonError('Expected array of ids');
         $stmt = $db->prepare('UPDATE players SET `rank`=? WHERE id=?');
         $db->beginTransaction();
@@ -71,23 +74,25 @@ try {
 
     } elseif ($action === 'bulk_names') {
         requireAdmin();
-        $data      = getInput();
-        $names     = $data['names'] ?? [];
-        $replace   = !empty($data['replace']);
+        $draftId  = contextDraftId($db);
+        $data     = getInput();
+        $names    = $data['names'] ?? [];
+        $replace  = !empty($data['replace']);
         if (!is_array($names)) jsonError('names must be an array');
 
         $db->beginTransaction();
-        if ($replace) $db->exec('DELETE FROM players');
+        if ($replace) $db->prepare('DELETE FROM players WHERE draft_id=?')->execute([$draftId]);
 
-        $maxRank = (int)$db->query('SELECT COALESCE(MAX(`rank`),0) FROM players')->fetchColumn();
-        $stmt    = $db->prepare(
-            'INSERT INTO players (name, `rank`) VALUES (?, ?)'
-        );
+        $maxStmt = $db->prepare('SELECT COALESCE(MAX(`rank`),0) FROM players WHERE draft_id=?');
+        $maxStmt->execute([$draftId]);
+        $maxRank = (int)$maxStmt->fetchColumn();
+
+        $stmt = $db->prepare('INSERT INTO players (draft_id, name, `rank`) VALUES (?, ?, ?)');
         $imported = 0;
         foreach ($names as $name) {
             $name = trim($name);
             if ($name === '') continue;
-            $stmt->execute([$name, $maxRank + $imported + 1]);
+            $stmt->execute([$draftId, $name, $maxRank + $imported + 1]);
             $imported++;
         }
         $db->commit();
@@ -95,6 +100,7 @@ try {
 
     } elseif ($action === 'import') {
         requireAdmin();
+        $draftId = contextDraftId($db);
         if (empty($_FILES['csv'])) jsonError('No CSV file uploaded');
 
         $handle = fopen($_FILES['csv']['tmp_name'], 'r');
@@ -107,9 +113,11 @@ try {
         $col = array_flip($headers);
 
         $db->beginTransaction();
-        $maxRank  = (int)$db->query('SELECT COALESCE(MAX(`rank`),0) FROM players')->fetchColumn();
+        $maxStmt = $db->prepare('SELECT COALESCE(MAX(`rank`),0) FROM players WHERE draft_id=?');
+        $maxStmt->execute([$draftId]);
+        $maxRank  = (int)$maxStmt->fetchColumn();
         $stmt     = $db->prepare(
-            'INSERT INTO players (name, `rank`, position, is_coaches_kid, age, notes) VALUES (?,?,?,?,?,?)'
+            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, notes) VALUES (?,?,?,?,?,?,?)'
         );
         $imported = 0; $errors = []; $row = 1;
 
@@ -128,7 +136,7 @@ try {
                 $ck = in_array($v, ['1','yes','true','y'], true) ? 1 : 0;
             }
             $stmt->execute([
-                $name, $rank,
+                $draftId, $name, $rank,
                 isset($col['position']) ? (trim($line[$col['position']]) ?: null) : null,
                 $ck,
                 isset($col['age']) ? ((int)trim($line[$col['age']]) ?: null) : null,
@@ -142,7 +150,8 @@ try {
 
     } elseif ($action === 'clear_all') {
         requireAdmin();
-        $db->exec('DELETE FROM players');
+        $draftId = contextDraftId($db);
+        $db->prepare('DELETE FROM players WHERE draft_id=?')->execute([$draftId]);
         jsonResponse(['success' => true]);
 
     } else {

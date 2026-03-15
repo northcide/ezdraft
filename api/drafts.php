@@ -9,12 +9,22 @@ try {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    function getActiveDraft(PDO $db): ?array {
-        return $db->query('SELECT * FROM drafts ORDER BY id DESC LIMIT 1')->fetch() ?: null;
+    function getContextDraft(PDO $db): ?array {
+        $role = currentRole();
+        if ($role === 'admin' && !empty($_SESSION['selected_draft_id'])) {
+            $stmt = $db->prepare('SELECT * FROM drafts WHERE id=?');
+            $stmt->execute([(int)$_SESSION['selected_draft_id']]);
+            return $stmt->fetch() ?: null;
+        }
+        // Coach or admin without selection: live draft
+        $stmt = $db->query("SELECT * FROM drafts WHERE status IN ('active','paused') ORDER BY updated_at DESC LIMIT 1");
+        return $stmt->fetch() ?: null;
     }
 
-    function sortedTeams(PDO $db): array {
-        return $db->query('SELECT * FROM teams ORDER BY draft_order ASC')->fetchAll();
+    function sortedTeams(PDO $db, int $draftId): array {
+        $stmt = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
+        $stmt->execute([$draftId]);
+        return $stmt->fetchAll();
     }
 
     function snakeTeamForPick(array $teams, int $pickNum): array {
@@ -26,11 +36,12 @@ try {
     }
 
     function buildPickSlots(PDO $db, int $draftId, int $totalRounds): void {
-        $teams = sortedTeams($db);
+        $teams = sortedTeams($db, $draftId);
         $n     = count($teams);
         if ($n === 0) return;
-        $stmt  = $db->prepare(
-            'INSERT IGNORE INTO picks (draft_id, round, pick_num, team_id) VALUES (?,?,?,?)'
+        $db->prepare('DELETE FROM picks WHERE draft_id=?')->execute([$draftId]);
+        $stmt = $db->prepare(
+            'INSERT INTO picks (draft_id, round, pick_num, team_id) VALUES (?,?,?,?)'
         );
         for ($p = 1; $p <= $n * $totalRounds; $p++) {
             $round = (int)ceil($p / $n);
@@ -56,22 +67,22 @@ try {
     function getNextAvailablePlayer(PDO $db, int $draftId): ?array {
         $stmt = $db->prepare(
             'SELECT * FROM players
-             WHERE id NOT IN (SELECT player_id FROM picks WHERE draft_id=? AND player_id IS NOT NULL)
+             WHERE draft_id=? AND id NOT IN (
+               SELECT player_id FROM picks WHERE draft_id=? AND player_id IS NOT NULL
+             )
              ORDER BY `rank` ASC LIMIT 1'
         );
-        $stmt->execute([$draftId]);
+        $stmt->execute([$draftId, $draftId]);
         return $stmt->fetch() ?: null;
     }
 
     function nextUnfilledPickNum(PDO $db, int $draftId, int $afterPickNum): int {
-        $total = (int)$db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?')
-                         ->execute([$draftId]) ? $db->query("SELECT COUNT(*) FROM picks WHERE draft_id=$draftId")->fetchColumn() : 0;
         $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
         $totalStmt->execute([$draftId]);
         $total = (int)$totalStmt->fetchColumn();
 
-        $stmt  = $db->prepare('SELECT player_id FROM picks WHERE draft_id=? AND pick_num=?');
-        $next  = $afterPickNum + 1;
+        $stmt = $db->prepare('SELECT player_id FROM picks WHERE draft_id=? AND pick_num=?');
+        $next = $afterPickNum + 1;
         while ($next <= $total) {
             $stmt->execute([$draftId, $next]);
             $row = $stmt->fetch();
@@ -81,10 +92,18 @@ try {
         return $next;
     }
 
-    function fullState(PDO $db): array {
-        $draft = getActiveDraft($db);
+    function allDraftsList(PDO $db): array {
+        return $db->query(
+            'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
+                    created_at, started_at, completed_at
+             FROM drafts ORDER BY created_at DESC'
+        )->fetchAll();
+    }
 
-        $picks = [];
+    function fullState(PDO $db): array {
+        $draft = getContextDraft($db);
+
+        $picks = []; $teams = []; $players = [];
         if ($draft) {
             $stmt = $db->prepare(
                 'SELECT pk.*, p.name AS player_name, p.rank AS player_rank, p.position AS player_position,
@@ -97,19 +116,26 @@ try {
             );
             $stmt->execute([$draft['id']]);
             $picks = $stmt->fetchAll();
+
+            $teams = sortedTeams($db, $draft['id']);
+
+            $pStmt = $db->prepare('SELECT * FROM players WHERE draft_id=? ORDER BY `rank` ASC');
+            $pStmt->execute([$draft['id']]);
+            $players = $pStmt->fetchAll();
         }
 
-        $teams   = sortedTeams($db);
-        $players = $db->query('SELECT * FROM players ORDER BY `rank` ASC')->fetchAll();
-        $role    = currentRole();
+        $role = currentRole();
+        $allDrafts = ($role === 'admin') ? allDraftsList($db) : null;
 
         return [
-            'draft'      => $draft,
-            'picks'      => $picks,
-            'teams'      => $teams,
-            'players'    => $players,
-            'role'       => $role,
-            'serverTime' => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
+            'draft'           => $draft,
+            'picks'           => $picks,
+            'teams'           => $teams,
+            'players'         => $players,
+            'role'            => $role,
+            'allDrafts'       => $allDrafts,
+            'selectedDraftId' => $_SESSION['selected_draft_id'] ?? null,
+            'serverTime'      => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
         ];
     }
 
@@ -118,42 +144,101 @@ try {
     if ($action === 'state') {
         jsonResponse(fullState($db));
 
+    } elseif ($action === 'list') {
+        requireAdmin();
+        jsonResponse(allDraftsList($db));
+
     } elseif ($action === 'create') {
         requireAdmin();
         $data = getInput();
-        if (empty($data['total_rounds'])) jsonError('total_rounds is required');
-        if (!(int)$db->query('SELECT COUNT(*) FROM teams')->fetchColumn()) {
-            jsonError('Add teams before creating a draft');
-        }
-        $db->exec('DELETE FROM drafts');
+        if (empty($data['name'])) jsonError('name is required');
         $stmt = $db->prepare(
-            'INSERT INTO drafts (status, total_rounds, timer_minutes, auto_pick_enabled, current_pick_num)
-             VALUES ("setup", ?, ?, ?, 1)'
+            'INSERT INTO drafts (name, status, total_rounds, timer_minutes, auto_pick_enabled, current_pick_num)
+             VALUES (?, "setup", ?, ?, ?, 1)'
         );
         $stmt->execute([
-            (int)$data['total_rounds'],
+            trim($data['name']),
+            (int)($data['total_rounds'] ?? 10),
             (int)($data['timer_minutes'] ?? 2),
             (int)($data['auto_pick_enabled'] ?? 1),
         ]);
         $draftId = (int)$db->lastInsertId();
-        buildPickSlots($db, $draftId, (int)$data['total_rounds']);
-        $stmt = $db->prepare('SELECT * FROM drafts WHERE id=?');
+        $_SESSION['selected_draft_id'] = $draftId;
+        jsonResponse(fullState($db), 201);
+
+    } elseif ($action === 'select') {
+        requireAdmin();
+        $data = getInput();
+        $draftId = (int)($data['id'] ?? 0);
+        if (!$draftId) jsonError('id required');
+        $stmt = $db->prepare('SELECT id FROM drafts WHERE id=?');
         $stmt->execute([$draftId]);
-        jsonResponse($stmt->fetch(), 201);
+        if (!$stmt->fetch()) jsonError('Draft not found', 404);
+        $_SESSION['selected_draft_id'] = $draftId;
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'update_settings') {
+        requireAdmin();
+        $data  = getInput();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft selected');
+        if ($draft['status'] === 'active') jsonError('Cannot change settings while draft is active');
+
+        $name   = isset($data['name'])             ? trim($data['name'])             : $draft['name'];
+        $rounds = isset($data['total_rounds'])      ? (int)$data['total_rounds']      : $draft['total_rounds'];
+        $timer  = isset($data['timer_minutes'])     ? (int)$data['timer_minutes']     : $draft['timer_minutes'];
+        $auto   = isset($data['auto_pick_enabled']) ? (int)$data['auto_pick_enabled'] : $draft['auto_pick_enabled'];
+
+        $db->prepare('UPDATE drafts SET name=?, total_rounds=?, timer_minutes=?, auto_pick_enabled=? WHERE id=?')
+           ->execute([$name, $rounds, $timer, $auto, $draft['id']]);
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'setup_picks') {
+        requireAdmin();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft selected');
+        if ($draft['status'] === 'active') jsonError('Cannot rebuild pick order while draft is active');
+        $teams = sortedTeams($db, $draft['id']);
+        if (empty($teams)) jsonError('Add teams before setting up pick order');
+        buildPickSlots($db, $draft['id'], $draft['total_rounds']);
+        // Reset to setup status, clear timestamps
+        $db->prepare("UPDATE drafts SET status='setup', current_pick_num=1, started_at=NULL, completed_at=NULL, timer_end=NULL WHERE id=?")
+           ->execute([$draft['id']]);
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'delete') {
+        requireAdmin();
+        $data    = getInput();
+        $draftId = (int)($data['id'] ?? 0);
+        if (!$draftId) jsonError('id required');
+        $chk = $db->prepare("SELECT status FROM drafts WHERE id=?");
+        $chk->execute([$draftId]);
+        $row = $chk->fetch();
+        if (!$row) jsonError('Draft not found', 404);
+        if ($row['status'] === 'active') jsonError('Cannot delete an active draft');
+        $db->prepare('DELETE FROM drafts WHERE id=?')->execute([$draftId]);
+        if (!empty($_SESSION['selected_draft_id']) && (int)$_SESSION['selected_draft_id'] === $draftId) {
+            unset($_SESSION['selected_draft_id']);
+        }
+        jsonResponse(fullState($db));
 
     } elseif ($action === 'start') {
         requireAdmin();
-        $draft = getActiveDraft($db);
-        if (!$draft) jsonError('No draft found');
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft selected');
         if ($draft['status'] === 'active') jsonError('Draft already active');
-        $db->prepare("UPDATE drafts SET status='active' WHERE id=?")->execute([$draft['id']]);
+        $pickCount = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
+        $pickCount->execute([$draft['id']]);
+        if (!(int)$pickCount->fetchColumn()) jsonError('Set up pick order before starting');
+        $db->prepare("UPDATE drafts SET status='active', started_at=COALESCE(started_at, NOW()) WHERE id=?")
+           ->execute([$draft['id']]);
         $draft['status'] = 'active';
         advanceTimer($db, $draft);
         jsonResponse(['success' => true]);
 
     } elseif ($action === 'pause') {
         requireAdmin();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
         if ($draft['status'] !== 'active') jsonError('Draft is not active');
         $remaining = null;
@@ -168,7 +253,7 @@ try {
 
     } elseif ($action === 'resume') {
         requireAdmin();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
         if ($draft['status'] !== 'paused') jsonError('Draft is not paused');
         $timerEnd = null;
@@ -183,23 +268,18 @@ try {
 
     } elseif ($action === 'end') {
         requireAdmin();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
-        $db->prepare("UPDATE drafts SET status='completed', timer_end=NULL WHERE id=?")
+        $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), timer_end=NULL WHERE id=?")
            ->execute([$draft['id']]);
-        jsonResponse(['success' => true]);
-
-    } elseif ($action === 'reset') {
-        requireAdmin();
-        $db->exec('DELETE FROM drafts');
         jsonResponse(['success' => true]);
 
     } elseif ($action === 'pick') {
         requireAdmin();
         $data  = getInput();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
-        if ($draft['status'] !== 'active') jsonError('Draft is not active');
+        if (!in_array($draft['status'], ['active', 'completed'], true)) jsonError('Draft is not active');
 
         $playerId = (int)($data['player_id'] ?? 0);
         if (!$playerId) jsonError('player_id is required');
@@ -208,44 +288,43 @@ try {
         $pickStmt = $db->prepare('SELECT * FROM picks WHERE draft_id=? AND pick_num=?');
         $pickStmt->execute([$draft['id'], $pickNum]);
         $pick = $pickStmt->fetch();
-        if (!$pick)               jsonError('Pick slot not found');
-        if ($pick['player_id'])   jsonError('Pick slot already filled');
+        if (!$pick) jsonError('Pick slot not found');
+        if ($pick['player_id']) jsonError('Pick slot already filled');
 
         $taken = $db->prepare('SELECT id FROM picks WHERE draft_id=? AND player_id=?');
         $taken->execute([$draft['id'], $playerId]);
         if ($taken->fetch()) jsonError('Player already drafted');
 
-        $db->prepare('UPDATE picks SET player_id=?, is_auto_pick=0, picked_at=NOW() WHERE draft_id=? AND pick_num=?')
+        $db->prepare('UPDATE picks SET player_id=?, is_auto_pick=0, is_pre_assigned=0, picked_at=NOW() WHERE draft_id=? AND pick_num=?')
            ->execute([$playerId, $draft['id'], $pickNum]);
 
-        $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
-        $total = (int)$db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?')
-                         ->execute([$draft['id']]);
-        $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
-        $totalStmt->execute([$draft['id']]);
-        $total = (int)$totalStmt->fetchColumn();
-
-        if ($next > $total) {
-            $db->prepare("UPDATE drafts SET status='completed', current_pick_num=?, timer_end=NULL WHERE id=?")
-               ->execute([$next, $draft['id']]);
-        } else {
-            $db->prepare('UPDATE drafts SET current_pick_num=? WHERE id=?')
-               ->execute([$next, $draft['id']]);
-            $draft['current_pick_num'] = $next;
-            advanceTimer($db, $draft);
+        if ($draft['status'] === 'active') {
+            $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
+            $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
+            $totalStmt->execute([$draft['id']]);
+            $total = (int)$totalStmt->fetchColumn();
+            if ($next > $total) {
+                $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), current_pick_num=?, timer_end=NULL WHERE id=?")
+                   ->execute([$next, $draft['id']]);
+            } else {
+                $db->prepare('UPDATE drafts SET current_pick_num=? WHERE id=?')
+                   ->execute([$next, $draft['id']]);
+                $draft['current_pick_num'] = $next;
+                advanceTimer($db, $draft);
+            }
         }
-        jsonResponse(['success' => true, 'next_pick_num' => $next]);
+        jsonResponse(['success' => true]);
 
     } elseif ($action === 'autopick') {
         requireAdmin();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
         if ($draft['status'] !== 'active') jsonError('Draft is not active');
 
         $player = getNextAvailablePlayer($db, $draft['id']);
         if (!$player) jsonError('No available players');
 
-        $pickNum = (int)$draft['current_pick_num'];
+        $pickNum  = (int)$draft['current_pick_num'];
         $pickStmt = $db->prepare('SELECT * FROM picks WHERE draft_id=? AND pick_num=?');
         $pickStmt->execute([$draft['id'], $pickNum]);
         if (!$pickStmt->fetch()) jsonError('Pick slot not found');
@@ -259,7 +338,7 @@ try {
         $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
 
         if ($next > $total) {
-            $db->prepare("UPDATE drafts SET status='completed', current_pick_num=?, timer_end=NULL WHERE id=?")
+            $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), current_pick_num=?, timer_end=NULL WHERE id=?")
                ->execute([$next, $draft['id']]);
         } else {
             $db->prepare('UPDATE drafts SET current_pick_num=? WHERE id=?')
@@ -268,7 +347,6 @@ try {
             advanceTimer($db, $draft);
         }
 
-        // Fetch pick info for announcement
         $pickInfo = $db->prepare(
             'SELECT pk.*, t.name AS team_name FROM picks pk JOIN teams t ON pk.team_id=t.id WHERE pk.draft_id=? AND pk.pick_num=?'
         );
@@ -278,9 +356,8 @@ try {
     } elseif ($action === 'preassign') {
         requireAdmin();
         $data  = getInput();
-        $draft = getActiveDraft($db);
+        $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
-        if ($draft['status'] === 'completed') jsonError('Draft is completed');
 
         $pickNum  = (int)($data['pick_num']  ?? 0);
         $playerId = (int)($data['player_id'] ?? 0);
@@ -300,13 +377,18 @@ try {
 
     } elseif ($action === 'clear_pick') {
         requireAdmin();
-        $data  = getInput();
-        $draft = getActiveDraft($db);
+        $data    = getInput();
+        $draft   = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
         $pickNum = (int)($data['pick_num'] ?? 0);
         if (!$pickNum) jsonError('pick_num required');
         $db->prepare('UPDATE picks SET player_id=NULL, is_pre_assigned=0, is_auto_pick=0, picked_at=NULL WHERE draft_id=? AND pick_num=?')
            ->execute([$draft['id'], $pickNum]);
+        // If draft was completed and we cleared a pick, reopen to paused for editing
+        if ($draft['status'] === 'completed') {
+            $db->prepare("UPDATE drafts SET status='paused', completed_at=NULL, current_pick_num=? WHERE id=?")
+               ->execute([$pickNum, $draft['id']]);
+        }
         jsonResponse(['success' => true]);
 
     } else {
