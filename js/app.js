@@ -354,7 +354,7 @@ function renderBoard() {
 
       if (isFilled) {
         td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
-          <span class="cell-player">${esc(pick.player_name)}</span>
+          <span class="cell-player">${pick.player_name.split(' ').map(w => `<span>${esc(w)}</span>`).join('')}</span>
           ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}`;
         td.title = 'Right-click to clear pick';
         td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
