@@ -83,7 +83,7 @@ try {
         }
         $end = (new DateTime('now', new DateTimeZone('UTC')))
             ->modify('+' . $draft['timer_minutes'] . ' minutes')
-            ->format('Y-m-d H:i:s');
+            ->format('Y-m-d\TH:i:s\Z');
         $draft['timer_end'] = $end;
         $draft['timer_remaining_seconds'] = null;
     }
@@ -192,7 +192,7 @@ try {
         if ($db['draft']['auto_pick_enabled'] && $db['draft']['timer_remaining_seconds'] !== null) {
             $timerEnd = (new DateTime('now', new DateTimeZone('UTC')))
                 ->modify('+' . $db['draft']['timer_remaining_seconds'] . ' seconds')
-                ->format('Y-m-d H:i:s');
+                ->format('Y-m-d\TH:i:s\Z');
         }
         $db['draft']['status'] = 'active';
         $db['draft']['timer_end'] = $timerEnd;

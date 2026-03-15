@@ -71,6 +71,9 @@ function applyState(data) {
   state.teams   = data.teams || [];
   state.players = data.players || [];
 
+  // Keep timerMax in sync with configured pick duration
+  if (state.draft) state.timerMax = state.draft.timer_minutes * 60;
+
   renderRankings();
   renderBoard();
   renderTeamList();
