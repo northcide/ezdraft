@@ -344,9 +344,13 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   position: sticky; top: 0; z-index: 5;
   transition: background .2s, color .2s;
 }
-/* On-the-clock column header — color updated by JS timer alongside the cell */
+/* On-the-clock column header — flashes pink */
 .board-table th.is-on-clock {
-  transition: background .8s ease;
+  animation: header-flash 1.1s ease-in-out infinite;
+}
+@keyframes header-flash {
+  0%, 100% { background: #cc0099; color: #fff; }
+  50%       { background: #ff00cc; color: #fff; box-shadow: 0 4px 20px rgba(255,0,204,.6); }
 }
 
 .board-table th.round-header {
@@ -383,12 +387,16 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   border-color: var(--accent);
 }
 
-/* Current pick — color driven by JS timer (green→amber→orange→red) */
+/* Current pick — flashes pink */
 .board-cell.is-current {
-  background: #15803d;   /* overridden each tick by updateTimerDisplay() */
-  border: 3px solid rgba(0,0,0,.25) !important;
+  background: var(--cell-current-bg) !important;
+  border: 3px solid var(--cell-current-border) !important;
   cursor: pointer;
-  transition: background .8s ease, border-color .8s ease;
+  animation: cell-flash 1.1s ease-in-out infinite;
+}
+@keyframes cell-flash {
+  0%, 100% { background: #cc0099; box-shadow: 0 0 0 3px rgba(255,0,204,.4); }
+  50%       { background: #ff00cc; box-shadow: 0 0 0 6px rgba(255,0,204,.15), 0 2px 20px rgba(255,0,204,.5); }
 }
 
 /* Filled (picked) slot — bold navy */
@@ -621,11 +629,11 @@ body.role-coach #rankings-panel { display: none; }
 
 /* On the clock banner */
 .mobile-on-clock {
-  background: #15803d;
+  background: var(--cell-current-bg);
   border-radius: var(--radius);
   padding: 16px;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
-  transition: background .8s ease;
+  animation: cell-flash 1.1s ease-in-out infinite;
 }
 .mobile-clock-label {
   font-size: 10px; font-weight: 900; letter-spacing: 2px;
@@ -697,7 +705,7 @@ body.role-coach #rankings-panel { display: none; }
   padding: 10px 14px; border-top: 1px solid var(--border);
 }
 .mobile-pick-row.is-filled   { background: var(--cell-picked-bg); }
-.mobile-pick-row.is-on-clock { background: #15803d; transition: background .8s ease; }
+.mobile-pick-row.is-on-clock { background: var(--cell-current-bg); animation: cell-flash 1.1s ease-in-out infinite; }
 
 .mobile-pick-num {
   font-size: 11px; font-weight: 700; min-width: 32px;

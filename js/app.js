@@ -431,20 +431,10 @@ function tickTimer() {
   if (remainMs <= 0) { stopTimer(); triggerAutoPick(); }
 }
 
-function timerColor(seconds, max) {
-  if (!max || seconds === null) return { bg: '#15803d', border: 'rgba(0,0,0,.25)' };
-  const pct = seconds / max;
-  if (pct > 0.5)  return { bg: '#15803d', border: '#166534' }; // green
-  if (pct > 0.25) return { bg: '#b45309', border: '#92400e' }; // amber
-  if (pct > 0.1)  return { bg: '#c2410c', border: '#9a3412' }; // orange
-  return                 { bg: '#b91c1c', border: '#991b1b' };  // red
-}
-
 function updateTimerDisplay(seconds) {
   const hasTimer = !!(state.draft?.auto_pick_enabled && state.draft?.timer_end);
-  const color    = timerColor(hasTimer ? seconds : null, state.timerMax);
 
-  // Topbar countdown text (bar is hidden via CSS)
+  // Topbar countdown text (bar hidden via CSS)
   const display   = document.getElementById('timer-display');
   const countdown = document.getElementById('timer-countdown');
   if (display && countdown) {
@@ -461,18 +451,8 @@ function updateTimerDisplay(seconds) {
     }
   }
 
-  // Update clock cell background + countdown text
-  const cell   = document.getElementById('clock-cell');
-  const header = document.getElementById('clock-header');
-  const ctdwn  = document.getElementById('cell-timer-countdown');
-  const mobileRow    = document.querySelector('.mobile-pick-row.is-on-clock');
-  const mobileBanner = document.querySelector('.mobile-on-clock');
-
-  if (cell)   { cell.style.background   = color.bg; cell.style.borderColor = color.border; }
-  if (header) { header.style.background = color.bg; }
-  if (mobileRow)    mobileRow.style.background    = color.bg;
-  if (mobileBanner) mobileBanner.style.background = color.bg;
-
+  // Cell countdown text
+  const ctdwn = document.getElementById('cell-timer-countdown');
   if (ctdwn) {
     if (hasTimer && seconds !== null) {
       const mins = Math.floor(seconds / 60);
@@ -903,8 +883,7 @@ function renderBoard() {
   wrap.innerHTML = '';
   wrap.appendChild(table);
   fitBoardToScreen();
-  // Apply current timer color immediately so new DOM has correct background
-  updateTimerDisplay(state.timerSeconds);
+  updateTimerDisplay(state.timerSeconds); // refresh countdown text in new cell DOM
 }
 
 function fitBoardToScreen() {
