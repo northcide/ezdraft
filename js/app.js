@@ -938,7 +938,7 @@ function updateControls() {
   const btnResetPicks = document.getElementById('btn-reset-picks');
   const bar           = document.getElementById('board-controls-bar');
 
-  if (bar) bar.classList.toggle('hidden', !state.draft);
+  if (bar) bar.classList.toggle('hidden', !state.draft || state.role !== 'admin');
 
   const isCompleted = status === 'completed';
   btnStart.classList.toggle('hidden', isCompleted);
