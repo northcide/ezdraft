@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS drafts (
   timer_remaining_seconds INT DEFAULT NULL,
   started_at              DATETIME DEFAULT NULL,
   completed_at            DATETIME DEFAULT NULL,
+  coach_name              VARCHAR(255) DEFAULT NULL,
+  coach_pin               VARCHAR(255) DEFAULT NULL,
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

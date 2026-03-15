@@ -54,17 +54,35 @@ function requireAdmin(): void {
 }
 
 // ── Draft context ─────────────────────────────────────────────────────────────
-// Returns the draft_id the current user is working in.
-// Admin: uses session selected_draft_id if set.
-// Coach or admin fallback: the live (active/paused) draft.
 function contextDraftId(PDO $db): int {
-    if (currentRole() === 'admin' && !empty($_SESSION['selected_draft_id'])) {
+    $role = currentRole();
+
+    if ($role === 'admin' && !empty($_SESSION['selected_draft_id'])) {
         return (int)$_SESSION['selected_draft_id'];
     }
+
+    if ($role === 'coach' && !empty($_SESSION['selected_draft_id'])) {
+        $accessible = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
+        $sel = (int)$_SESSION['selected_draft_id'];
+        if (in_array($sel, $accessible, true)) {
+            return $sel;
+        }
+    }
+
+    // Fallback: live draft
     $stmt = $db->query("SELECT id FROM drafts WHERE status IN ('active','paused') ORDER BY updated_at DESC LIMIT 1");
     $row = $stmt->fetch();
-    if ($row) return (int)$row['id'];
-    jsonError('No draft selected. Please select or create a draft.', 400);
+    if ($row) {
+        if ($role === 'coach') {
+            $accessible = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
+            if (!in_array((int)$row['id'], $accessible, true)) {
+                jsonError('No accessible draft is currently live', 403);
+            }
+        }
+        return (int)$row['id'];
+    }
+
+    jsonError('No draft selected or active. Please select a draft.', 400);
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────────

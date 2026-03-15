@@ -16,7 +16,16 @@ try {
             $stmt->execute([(int)$_SESSION['selected_draft_id']]);
             return $stmt->fetch() ?: null;
         }
-        // Coach or admin without selection: live draft
+        if ($role === 'coach' && !empty($_SESSION['selected_draft_id'])) {
+            $accessible = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
+            $sel = (int)$_SESSION['selected_draft_id'];
+            if (in_array($sel, $accessible, true)) {
+                $stmt = $db->prepare('SELECT * FROM drafts WHERE id=?');
+                $stmt->execute([$sel]);
+                return $stmt->fetch() ?: null;
+            }
+        }
+        // Fallback: live draft
         $stmt = $db->query("SELECT * FROM drafts WHERE status IN ('active','paused') ORDER BY updated_at DESC LIMIT 1");
         return $stmt->fetch() ?: null;
     }
@@ -80,9 +89,8 @@ try {
         $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
         $totalStmt->execute([$draftId]);
         $total = (int)$totalStmt->fetchColumn();
-
-        $stmt = $db->prepare('SELECT player_id FROM picks WHERE draft_id=? AND pick_num=?');
-        $next = $afterPickNum + 1;
+        $stmt  = $db->prepare('SELECT player_id FROM picks WHERE draft_id=? AND pick_num=?');
+        $next  = $afterPickNum + 1;
         while ($next <= $total) {
             $stmt->execute([$draftId, $next]);
             $row = $stmt->fetch();
@@ -92,18 +100,10 @@ try {
         return $next;
     }
 
-    function allDraftsList(PDO $db): array {
-        return $db->query(
-            'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
-                    created_at, started_at, completed_at
-             FROM drafts ORDER BY created_at DESC'
-        )->fetchAll();
-    }
-
     function fullState(PDO $db): array {
-        $draft = getContextDraft($db);
+        $draft   = getContextDraft($db);
+        $picks   = []; $teams = []; $players = [];
 
-        $picks = []; $teams = []; $players = [];
         if ($draft) {
             $stmt = $db->prepare(
                 'SELECT pk.*, p.name AS player_name, p.rank AS player_rank, p.position AS player_position,
@@ -115,27 +115,45 @@ try {
                  ORDER BY pk.pick_num ASC'
             );
             $stmt->execute([$draft['id']]);
-            $picks = $stmt->fetchAll();
-
-            $teams = sortedTeams($db, $draft['id']);
-
-            $pStmt = $db->prepare('SELECT * FROM players WHERE draft_id=? ORDER BY `rank` ASC');
+            $picks   = $stmt->fetchAll();
+            $teams   = sortedTeams($db, $draft['id']);
+            $pStmt   = $db->prepare('SELECT * FROM players WHERE draft_id=? ORDER BY `rank` ASC');
             $pStmt->execute([$draft['id']]);
             $players = $pStmt->fetchAll();
         }
 
-        $role = currentRole();
-        $allDrafts = ($role === 'admin') ? allDraftsList($db) : null;
+        $role      = currentRole();
+        $allDrafts = null;
+        $accessibleDrafts = null;
+
+        if ($role === 'admin') {
+            $allDrafts = $db->query(
+                'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
+                        coach_name, coach_pin, created_at, started_at, completed_at
+                 FROM drafts ORDER BY created_at DESC'
+            )->fetchAll();
+        } elseif ($role === 'coach') {
+            $ids = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
+            if (!empty($ids)) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $stmt = $db->prepare("SELECT id, name, status, started_at, completed_at FROM drafts WHERE id IN ($placeholders) ORDER BY created_at DESC");
+                $stmt->execute($ids);
+                $accessibleDrafts = $stmt->fetchAll();
+            } else {
+                $accessibleDrafts = [];
+            }
+        }
 
         return [
-            'draft'           => $draft,
-            'picks'           => $picks,
-            'teams'           => $teams,
-            'players'         => $players,
-            'role'            => $role,
-            'allDrafts'       => $allDrafts,
-            'selectedDraftId' => $_SESSION['selected_draft_id'] ?? null,
-            'serverTime'      => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
+            'draft'            => $draft,
+            'picks'            => $picks,
+            'teams'            => $teams,
+            'players'          => $players,
+            'role'             => $role,
+            'allDrafts'        => $allDrafts,
+            'accessibleDrafts' => $accessibleDrafts,
+            'selectedDraftId'  => $_SESSION['selected_draft_id'] ?? null,
+            'serverTime'       => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
         ];
     }
 
@@ -146,7 +164,12 @@ try {
 
     } elseif ($action === 'list') {
         requireAdmin();
-        jsonResponse(allDraftsList($db));
+        $drafts = $db->query(
+            'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
+                    coach_name, coach_pin, created_at, started_at, completed_at
+             FROM drafts ORDER BY created_at DESC'
+        )->fetchAll();
+        jsonResponse($drafts);
 
     } elseif ($action === 'create') {
         requireAdmin();
@@ -168,12 +191,22 @@ try {
 
     } elseif ($action === 'select') {
         requireAdmin();
-        $data = getInput();
+        $data    = getInput();
         $draftId = (int)($data['id'] ?? 0);
         if (!$draftId) jsonError('id required');
         $stmt = $db->prepare('SELECT id FROM drafts WHERE id=?');
         $stmt->execute([$draftId]);
         if (!$stmt->fetch()) jsonError('Draft not found', 404);
+        $_SESSION['selected_draft_id'] = $draftId;
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'coach_select') {
+        if (currentRole() !== 'coach') jsonError('Coach access required', 403);
+        $data    = getInput();
+        $draftId = (int)($data['id'] ?? 0);
+        if (!$draftId) jsonError('id required');
+        $accessible = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
+        if (!in_array($draftId, $accessible, true)) jsonError('Draft not accessible', 403);
         $_SESSION['selected_draft_id'] = $draftId;
         jsonResponse(fullState($db));
 
@@ -184,13 +217,15 @@ try {
         if (!$draft) jsonError('No draft selected');
         if ($draft['status'] === 'active') jsonError('Cannot change settings while draft is active');
 
-        $name   = isset($data['name'])             ? trim($data['name'])             : $draft['name'];
-        $rounds = isset($data['total_rounds'])      ? (int)$data['total_rounds']      : $draft['total_rounds'];
-        $timer  = isset($data['timer_minutes'])     ? (int)$data['timer_minutes']     : $draft['timer_minutes'];
-        $auto   = isset($data['auto_pick_enabled']) ? (int)$data['auto_pick_enabled'] : $draft['auto_pick_enabled'];
+        $name       = isset($data['name'])             ? trim($data['name'])             : $draft['name'];
+        $rounds     = isset($data['total_rounds'])      ? (int)$data['total_rounds']      : $draft['total_rounds'];
+        $timer      = isset($data['timer_minutes'])     ? (int)$data['timer_minutes']     : $draft['timer_minutes'];
+        $auto       = isset($data['auto_pick_enabled']) ? (int)$data['auto_pick_enabled'] : $draft['auto_pick_enabled'];
+        $coachName  = array_key_exists('coach_name', $data) ? (trim($data['coach_name']) ?: null) : $draft['coach_name'];
+        $coachPin   = array_key_exists('coach_pin',  $data) ? (trim($data['coach_pin'])  ?: null) : $draft['coach_pin'];
 
-        $db->prepare('UPDATE drafts SET name=?, total_rounds=?, timer_minutes=?, auto_pick_enabled=? WHERE id=?')
-           ->execute([$name, $rounds, $timer, $auto, $draft['id']]);
+        $db->prepare('UPDATE drafts SET name=?, total_rounds=?, timer_minutes=?, auto_pick_enabled=?, coach_name=?, coach_pin=? WHERE id=?')
+           ->execute([$name, $rounds, $timer, $auto, $coachName, $coachPin, $draft['id']]);
         jsonResponse(fullState($db));
 
     } elseif ($action === 'setup_picks') {
@@ -201,7 +236,6 @@ try {
         $teams = sortedTeams($db, $draft['id']);
         if (empty($teams)) jsonError('Add teams before setting up pick order');
         buildPickSlots($db, $draft['id'], $draft['total_rounds']);
-        // Reset to setup status, clear timestamps
         $db->prepare("UPDATE drafts SET status='setup', current_pick_num=1, started_at=NULL, completed_at=NULL, timer_end=NULL WHERE id=?")
            ->execute([$draft['id']]);
         jsonResponse(fullState($db));
@@ -288,7 +322,7 @@ try {
         $pickStmt = $db->prepare('SELECT * FROM picks WHERE draft_id=? AND pick_num=?');
         $pickStmt->execute([$draft['id'], $pickNum]);
         $pick = $pickStmt->fetch();
-        if (!$pick) jsonError('Pick slot not found');
+        if (!$pick)             jsonError('Pick slot not found');
         if ($pick['player_id']) jsonError('Pick slot already filled');
 
         $taken = $db->prepare('SELECT id FROM picks WHERE draft_id=? AND player_id=?');
@@ -299,10 +333,10 @@ try {
            ->execute([$playerId, $draft['id'], $pickNum]);
 
         if ($draft['status'] === 'active') {
-            $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
             $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
             $totalStmt->execute([$draft['id']]);
             $total = (int)$totalStmt->fetchColumn();
+            $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
             if ($next > $total) {
                 $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), current_pick_num=?, timer_end=NULL WHERE id=?")
                    ->execute([$next, $draft['id']]);
@@ -384,7 +418,6 @@ try {
         if (!$pickNum) jsonError('pick_num required');
         $db->prepare('UPDATE picks SET player_id=NULL, is_pre_assigned=0, is_auto_pick=0, picked_at=NULL WHERE draft_id=? AND pick_num=?')
            ->execute([$draft['id'], $pickNum]);
-        // If draft was completed and we cleared a pick, reopen to paused for editing
         if ($draft['status'] === 'completed') {
             $db->prepare("UPDATE drafts SET status='paused', completed_at=NULL, current_pick_num=? WHERE id=?")
                ->execute([$pickNum, $draft['id']]);

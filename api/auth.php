@@ -9,39 +9,56 @@ try {
         if (!$role) jsonError('Not authenticated', 401);
         $db   = getDB();
         $name = $db->query("SELECT value FROM settings WHERE `key`='league_name'")->fetchColumn();
-        jsonResponse(['role' => $role, 'league_name' => $name ?: 'EasyDraft']);
+        $result = ['role' => $role, 'league_name' => $name ?: 'EasyDraft'];
+        if ($role === 'coach') {
+            $accessible = getAccessibleDrafts($db);
+            $result['accessibleDrafts'] = $accessible;
+        }
+        jsonResponse($result);
 
     } elseif ($action === 'login') {
-        $data = getInput();
+        $data   = getInput();
         $league = trim($data['league_name'] ?? '');
         $pin    = trim($data['pin'] ?? '');
-
         if ($league === '' || $pin === '') jsonError('League name and PIN are required');
 
-        $db = getDB();
+        $db  = getDB();
         $row = $db->query(
-            "SELECT `key`, value FROM settings WHERE `key` IN ('league_name','admin_pin','coach_pin')"
+            "SELECT `key`, value FROM settings WHERE `key` IN ('league_name','admin_pin')"
         )->fetchAll(PDO::FETCH_KEY_PAIR);
 
-        $storedLeague = $row['league_name'] ?? '';
-        $adminPin     = $row['admin_pin']   ?? '';
-        $coachPin     = $row['coach_pin']   ?? '';
-
-        if (strcasecmp($league, $storedLeague) !== 0) {
-            jsonError('League name not found', 401);
-        }
-
-        if ($pin === $adminPin) {
+        // Check admin first
+        if (strcasecmp($league, $row['league_name'] ?? '') === 0 && $pin === ($row['admin_pin'] ?? '')) {
             $_SESSION['role']        = 'admin';
-            $_SESSION['league_name'] = $storedLeague;
-            jsonResponse(['role' => 'admin', 'league_name' => $storedLeague]);
-        } elseif ($pin === $coachPin) {
-            $_SESSION['role']        = 'coach';
-            $_SESSION['league_name'] = $storedLeague;
-            jsonResponse(['role' => 'coach', 'league_name' => $storedLeague]);
-        } else {
-            jsonError('Incorrect PIN', 401);
+            $_SESSION['league_name'] = $row['league_name'];
+            unset($_SESSION['accessible_draft_ids'], $_SESSION['selected_draft_id']);
+            jsonResponse(['role' => 'admin', 'league_name' => $row['league_name']]);
         }
+
+        // Check per-draft coach credentials
+        $stmt = $db->prepare(
+            "SELECT id, name FROM drafts WHERE LOWER(coach_name)=LOWER(?) AND coach_pin=? AND coach_name IS NOT NULL AND coach_pin IS NOT NULL"
+        );
+        $stmt->execute([$league, $pin]);
+        $matchedDrafts = $stmt->fetchAll();
+
+        if (empty($matchedDrafts)) {
+            jsonError('League name or PIN not found', 401);
+        }
+
+        $accessibleIds = array_column($matchedDrafts, 'id');
+        $_SESSION['role']                 = 'coach';
+        $_SESSION['league_name']          = $league;
+        $_SESSION['accessible_draft_ids'] = $accessibleIds;
+
+        // Auto-select: prefer live draft, else first accessible
+        $liveStmt = $db->prepare("SELECT id FROM drafts WHERE id IN (" . implode(',', array_fill(0, count($accessibleIds), '?')) . ") AND status IN ('active','paused') ORDER BY updated_at DESC LIMIT 1");
+        $liveStmt->execute($accessibleIds);
+        $live = $liveStmt->fetchColumn();
+        $_SESSION['selected_draft_id'] = $live ?: $accessibleIds[0];
+
+        $accessible = getAccessibleDrafts($db);
+        jsonResponse(['role' => 'coach', 'league_name' => $league, 'accessibleDrafts' => $accessible]);
 
     } elseif ($action === 'logout') {
         $_SESSION = [];
@@ -54,4 +71,13 @@ try {
 
 } catch (PDOException $e) {
     jsonError('Database error: ' . $e->getMessage(), 500);
+}
+
+function getAccessibleDrafts(PDO $db): array {
+    $ids = $_SESSION['accessible_draft_ids'] ?? [];
+    if (empty($ids)) return [];
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $db->prepare("SELECT id, name, status, started_at, completed_at FROM drafts WHERE id IN ($placeholders) ORDER BY created_at DESC");
+    $stmt->execute(array_map('intval', $ids));
+    return $stmt->fetchAll();
 }
