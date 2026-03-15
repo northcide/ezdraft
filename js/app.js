@@ -436,7 +436,7 @@ async function onCellDrop(e, pickNum) {
 let reorderDragSrcIdx = null;
 
 function renderReorderList() {
-  const list = document.getElementById('player-reorder-list');
+  const list = document.getElementById('player-reorder-list-sidebar');
   if (!list) return;
   const players = [...state.players].sort((a, b) => a.rank - b.rank);
 
@@ -599,7 +599,18 @@ function updateCurrentPickLabel() {
 
 // ── Event Wiring ──────────────────────────────────────────────────────────────
 document.getElementById('btn-admin').addEventListener('click', () => {
-  document.getElementById('admin-panel').classList.toggle('hidden');
+  const adminPanel   = document.getElementById('admin-panel');
+  const rankingsView = document.getElementById('rankings-view');
+  const reorderView  = document.getElementById('reorder-view');
+
+  const opening = adminPanel.classList.toggle('hidden');
+  // classList.toggle returns true when the class was ADDED (panel hidden), false when removed (panel shown)
+  const adminOpen = !adminPanel.classList.contains('hidden');
+
+  rankingsView.classList.toggle('hidden', adminOpen);
+  reorderView.classList.toggle('hidden', !adminOpen);
+
+  if (adminOpen) renderReorderList();
 });
 
 document.getElementById('btn-add-team').addEventListener('click', addTeam);

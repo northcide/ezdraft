@@ -110,29 +110,37 @@
         <div id="import-result" class="import-result"></div>
       </section>
 
-      <!-- Player Rankings -->
-      <section class="admin-section admin-section-rankings">
-        <h3>Player Rankings <span id="reorder-status" class="reorder-status"></span></h3>
-        <div id="player-reorder-list" class="player-reorder-list"></div>
-      </section>
-
     </div>
   </div>
 
   <!-- Main Content -->
   <div id="main-content">
 
-    <!-- Left: Rankings -->
+    <!-- Left: Rankings / Reorder (toggled by admin mode) -->
     <aside id="rankings-panel">
-      <div class="rankings-header">
-        <input type="text" id="filter-search" class="search-input" placeholder="Search players…" autocomplete="off">
-        <label class="filter-check">
-          <input type="checkbox" id="filter-available" checked> Available only
-        </label>
+
+      <!-- Normal view: search + player list -->
+      <div id="rankings-view">
+        <div class="rankings-header">
+          <input type="text" id="filter-search" class="search-input" placeholder="Search players…" autocomplete="off">
+          <label class="filter-check">
+            <input type="checkbox" id="filter-available" checked> Available only
+          </label>
+        </div>
+        <div id="rankings-list" class="rankings-list">
+          <div class="empty-state">No players loaded. Import a CSV in admin.</div>
+        </div>
       </div>
-      <div id="rankings-list" class="rankings-list">
-        <div class="empty-state">No players loaded. Import a CSV in admin.</div>
+
+      <!-- Admin view: drag-to-reorder -->
+      <div id="reorder-view" class="hidden">
+        <div class="rankings-header reorder-header">
+          <span class="reorder-title">Drag to reorder</span>
+          <span id="reorder-status" class="reorder-status"></span>
+        </div>
+        <div id="player-reorder-list" class="player-reorder-list-sidebar"></div>
       </div>
+
     </aside>
 
     <!-- Right: Draft Board -->
