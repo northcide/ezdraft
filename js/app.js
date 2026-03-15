@@ -25,6 +25,7 @@ const state = {
   timerMax:         0,
   announcementTimeout: null,
   dragPlayerId:     null,
+  timerSeconds:     null,
   teamsNeedSetup:       false,
   mobilePlayerListVisible:  false,
   mobileAvailableOnly:      true,
@@ -425,25 +426,45 @@ function tickTimer() {
   const serverNow = Date.now() - state.serverOffset;
   const remainMs  = new Date(state.draft.timer_end).getTime() - serverNow;
   const remainSec = Math.max(0, Math.ceil(remainMs / 1000));
+  state.timerSeconds = remainSec;
   updateTimerDisplay(remainSec);
   if (remainMs <= 0) { stopTimer(); triggerAutoPick(); }
 }
 
+function timerColor(seconds, max) {
+  if (!max || seconds === null) return { bg: '#15803d', border: 'rgba(0,0,0,.25)' };
+  const pct = seconds / max;
+  if (pct > 0.5)  return { bg: '#15803d', border: '#166534' }; // green
+  if (pct > 0.25) return { bg: '#b45309', border: '#92400e' }; // amber
+  if (pct > 0.1)  return { bg: '#c2410c', border: '#9a3412' }; // orange
+  return                 { bg: '#b91c1c', border: '#991b1b' };  // red
+}
+
 function updateTimerDisplay(seconds) {
-  const display   = document.getElementById('timer-display');
-  const countdown = document.getElementById('timer-countdown');
-  const bar       = document.getElementById('timer-bar');
-  if (!state.draft?.auto_pick_enabled || seconds === null) { display.classList.add('hidden'); return; }
-  display.classList.remove('hidden');
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  countdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-  const pct = state.timerMax > 0 ? (seconds / state.timerMax) * 100 : 100;
-  bar.style.width = `${pct}%`;
-  countdown.className = 'timer-countdown';
-  bar.style.background = 'var(--accent2)';
-  if (seconds <= 30) { countdown.classList.add('warn'); bar.style.background = 'var(--warn)'; }
-  if (seconds <= 10) { countdown.classList.remove('warn'); countdown.classList.add('urgent'); bar.style.background = 'var(--danger)'; }
+  const hasTimer = !!(state.draft?.auto_pick_enabled && state.draft?.timer_end);
+  const color    = timerColor(hasTimer ? seconds : null, state.timerMax);
+
+  // Update clock cell background + countdown text
+  const cell   = document.getElementById('clock-cell');
+  const header = document.getElementById('clock-header');
+  const ctdwn  = document.getElementById('cell-timer-countdown');
+  const mobileRow    = document.querySelector('.mobile-pick-row.is-on-clock');
+  const mobileBanner = document.querySelector('.mobile-on-clock');
+
+  if (cell)   { cell.style.background   = color.bg; cell.style.borderColor = color.border; }
+  if (header) { header.style.background = color.bg; }
+  if (mobileRow)    mobileRow.style.background    = color.bg;
+  if (mobileBanner) mobileBanner.style.background = color.bg;
+
+  if (ctdwn) {
+    if (hasTimer && seconds !== null) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      ctdwn.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      ctdwn.textContent = '';
+    }
+  }
 }
 
 async function triggerAutoPick() {
@@ -796,7 +817,7 @@ function renderBoard() {
   teams.forEach(t => {
     const th = document.createElement('th');
     th.textContent = t.name; th.dataset.teamId = t.id;
-    if (onClockTeamId && t.id == onClockTeamId) th.classList.add('is-on-clock');
+    if (onClockTeamId && t.id == onClockTeamId) { th.classList.add('is-on-clock'); th.id = 'clock-header'; }
     headerRow.appendChild(th);
   });
   thead.appendChild(headerRow); table.appendChild(thead);
@@ -851,8 +872,10 @@ function renderBoard() {
           td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
         }
       } else {
-        td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
-          ${isCurrent ? '<span class="cell-clock-label">ON THE CLOCK</span>' : ''}`;
+        if (isCurrent) td.id = 'clock-cell';
+        td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>` +
+          (isCurrent ? `<span class="cell-clock-label">ON THE CLOCK</span>` +
+                       `<span id="cell-timer-countdown" class="cell-timer-countdown"></span>` : '');
       }
       tr.appendChild(td);
     });
@@ -863,6 +886,8 @@ function renderBoard() {
   wrap.innerHTML = '';
   wrap.appendChild(table);
   fitBoardToScreen();
+  // Apply current timer color immediately so new DOM has correct background
+  updateTimerDisplay(state.timerSeconds);
 }
 
 function fitBoardToScreen() {
