@@ -1,0 +1,12 @@
+# Environment / config
+api/config.php
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+.vscode/
+.idea/
+
+# Logs
+*.log
