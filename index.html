@@ -7,9 +7,141 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <div id="app">
-    <h1>EasyDraft</h1>
+
+<!-- Pick Announcement Overlay -->
+<div id="announcement" class="announcement hidden">
+  <div class="announcement-inner">
+    <div class="announcement-pick">Pick <span id="ann-pick-num"></span></div>
+    <div class="announcement-team" id="ann-team-name"></div>
+    <div class="announcement-selects">selects</div>
+    <div class="announcement-player" id="ann-player-name"></div>
+    <div class="announcement-position" id="ann-player-pos"></div>
   </div>
-  <script src="js/app.js"></script>
+</div>
+
+<!-- Main App -->
+<div id="app">
+
+  <!-- Top Bar -->
+  <header id="topbar">
+    <div class="topbar-left">
+      <span class="logo">⚾ EasyDraft</span>
+      <span id="draft-status-badge" class="badge badge-setup">Setup</span>
+    </div>
+    <div class="topbar-center" id="timer-area">
+      <div id="timer-display" class="timer-display hidden">
+        <span class="timer-label">Time remaining:</span>
+        <span id="timer-countdown" class="timer-countdown">2:00</span>
+        <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button id="btn-admin" class="btn btn-secondary">⚙ Admin</button>
+    </div>
+  </header>
+
+  <!-- Admin Panel (collapsible) -->
+  <div id="admin-panel" class="admin-panel hidden">
+    <div class="admin-sections">
+
+      <!-- Teams Section -->
+      <section class="admin-section">
+        <h3>Teams</h3>
+        <div id="team-list" class="team-list"></div>
+        <div class="admin-row">
+          <input type="text" id="new-team-name" placeholder="Team name" class="input-sm">
+          <button id="btn-add-team" class="btn btn-sm btn-primary">+ Add Team</button>
+        </div>
+      </section>
+
+      <!-- Draft Settings -->
+      <section class="admin-section">
+        <h3>Draft Settings</h3>
+        <div class="admin-row">
+          <label>Rounds: <input type="number" id="setting-rounds" min="1" max="30" value="10" class="input-sm input-num"></label>
+          <label>Timer (min): <input type="number" id="setting-timer" min="0" max="30" value="2" class="input-sm input-num"></label>
+          <label class="label-check">
+            <input type="checkbox" id="setting-autopick" checked>
+            Auto-pick on expire
+          </label>
+        </div>
+        <div class="admin-row">
+          <button id="btn-create-draft" class="btn btn-primary">Create Draft</button>
+        </div>
+      </section>
+
+      <!-- Draft Controls -->
+      <section class="admin-section" id="draft-controls-section">
+        <h3>Draft Controls</h3>
+        <div class="admin-row">
+          <button id="btn-start" class="btn btn-success" disabled>▶ Start</button>
+          <button id="btn-pause" class="btn btn-warning hidden">⏸ Pause</button>
+          <button id="btn-resume" class="btn btn-success hidden">▶ Resume</button>
+          <button id="btn-end" class="btn btn-danger" disabled>■ End Draft</button>
+          <button id="btn-autopick-now" class="btn btn-secondary hidden">⚡ Auto-pick Now</button>
+        </div>
+      </section>
+
+      <!-- Player Import -->
+      <section class="admin-section">
+        <h3>Import Players (CSV)</h3>
+        <p class="help-text">CSV columns: <code>name, rank, position, age, coaches_kid</code></p>
+        <div class="admin-row">
+          <input type="file" id="csv-file" accept=".csv">
+          <button id="btn-import" class="btn btn-primary">Import</button>
+          <button id="btn-clear-players" class="btn btn-danger-outline">Clear All Players</button>
+        </div>
+        <div id="import-result" class="import-result"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main-content">
+
+    <!-- Left: Rankings -->
+    <aside id="rankings-panel">
+      <div class="rankings-header">
+        <h2>Rankings</h2>
+        <div class="filters">
+          <select id="filter-position" class="filter-select">
+            <option value="">All Positions</option>
+            <option value="Pitcher">Pitcher</option>
+            <option value="Catcher">Catcher</option>
+            <option value="Infield">Infield</option>
+            <option value="Outfield">Outfield</option>
+          </select>
+          <select id="filter-age" class="filter-select">
+            <option value="">All Ages</option>
+          </select>
+          <label class="filter-check">
+            <input type="checkbox" id="filter-coaches-kid"> Coaches Kid
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" id="filter-available" checked> Available Only
+          </label>
+        </div>
+      </div>
+      <div id="rankings-list" class="rankings-list">
+        <div class="empty-state">No players loaded. Import a CSV in admin.</div>
+      </div>
+    </aside>
+
+    <!-- Right: Draft Board -->
+    <main id="board-panel">
+      <div class="board-header">
+        <h2>Draft Board</h2>
+        <span id="current-pick-label" class="current-pick-label"></span>
+      </div>
+      <div id="board-wrap" class="board-wrap">
+        <div class="empty-state">Create a draft to see the board.</div>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<script src="js/app.js"></script>
 </body>
 </html>
