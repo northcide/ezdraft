@@ -137,6 +137,16 @@ async function fetchState() {
 }
 
 function applyState(data) {
+  // Detect newly filled picks for coaches — they don't trigger makePick themselves
+  if (state.role === 'coach') {
+    const oldFilled = new Set((state.picks || []).filter(p => p.player_id).map(p => p.pick_num));
+    const newlyFilled = (data.picks || []).filter(p => p.player_id && !oldFilled.has(p.pick_num));
+    if (newlyFilled.length > 0) {
+      const pick = newlyFilled[newlyFilled.length - 1];
+      showAnnouncement(pick, { name: pick.player_name, position: pick.player_position || '' });
+    }
+  }
+
   state.draft           = data.draft;
   state.picks           = data.picks   || [];
   state.teams           = data.teams   || [];

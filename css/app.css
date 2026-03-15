@@ -508,9 +508,12 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .announcement-team    { font-size: 32px; color: #93c5fd; font-weight: 800; margin-bottom: 4px; }
 .announcement-selects { font-size: 13px; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 14px; }
 .announcement-player  {
-  font-size: 72px; font-weight: 900; color: #ffffff;
-  text-shadow: 0 0 60px rgba(147,197,253,.7);
-  letter-spacing: -1px; line-height: 1.05;
+  font-size: 108px; font-weight: 900; color: #ffffff;
+  text-shadow: 0 0 80px rgba(147,197,253,.8);
+  letter-spacing: -2px; line-height: 1.05;
+}
+@media (max-width: 767px) {
+  .announcement-player { font-size: 64px; letter-spacing: -1px; }
 }
 .announcement-position { font-size: 20px; color: #4ade80; margin-top: 10px; font-weight: 600; }
 
@@ -571,7 +574,6 @@ body.role-coach #rankings-panel { display: none; }
 }
 @media (max-width: 600px) {
   .admin-sections { flex-direction: column; }
-  .announcement-player { font-size: 44px; }
 }
 
 /* ── Mobile Board (coach, < 768px) ───────────────────────────────────────── */
