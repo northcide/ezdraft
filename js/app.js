@@ -277,96 +277,90 @@ function renderBoard() {
     return;
   }
 
-  const teams = state.teams; // sorted by draft_order
+  const teams  = state.teams;
   const rounds = state.draft.total_rounds;
-  const n = teams.length;
+  const n      = teams.length;
 
-  // Build table
+  // Find which team is currently on the clock
+  const currentPick = state.picks.find(p => p.pick_num == state.draft.current_pick_num);
+  const onClockTeamId = (state.draft.status === 'active' && currentPick) ? currentPick.team_id : null;
+
   const table = document.createElement('table');
   table.className = 'board-table';
 
-  // Header row: Round | Team1 | Team2 | ...
+  // ── Header row ──────────────────────────────────────────────────────────────
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
+
   const thRound = document.createElement('th');
   thRound.className = 'round-header';
   thRound.textContent = 'Rd';
   headerRow.appendChild(thRound);
+
   teams.forEach(t => {
     const th = document.createElement('th');
     th.textContent = t.name;
+    th.dataset.teamId = t.id;
+    if (onClockTeamId && t.id == onClockTeamId) {
+      th.classList.add('is-on-clock');
+    }
     headerRow.appendChild(th);
   });
+
   thead.appendChild(headerRow);
   table.appendChild(thead);
 
-  // Build a map: pick_num -> pick row
+  // ── Body rows ────────────────────────────────────────────────────────────────
   const pickMap = {};
   state.picks.forEach(p => { pickMap[p.pick_num] = p; });
 
   const tbody = document.createElement('tbody');
   for (let r = 1; r <= rounds; r++) {
     const tr = document.createElement('tr');
+
     const tdRound = document.createElement('td');
     tdRound.className = 'board-cell round-cell';
     tdRound.textContent = r;
     tr.appendChild(tdRound);
 
-    // In round r, picks go from (r-1)*n+1 to r*n
-    // But we need to map each team column to the correct pick
-    // For odd rounds: pick order = teams[0], teams[1], ..., teams[n-1]
-    // For even rounds: reversed
-    const teamOrder = (r % 2 === 1)
-      ? teams.map((_, i) => i)
-      : teams.map((_, i) => n - 1 - i);
-
-    // Build a map: teamId -> pick in this round
+    // Build teamId → pick map for this round
     const roundPickByTeam = {};
     for (let pos = 0; pos < n; pos++) {
-      const pickNum = (r - 1) * n + pos + 1;
-      const pick = pickMap[pickNum];
+      const pick = pickMap[(r - 1) * n + pos + 1];
       if (pick) roundPickByTeam[pick.team_id] = pick;
     }
 
     teams.forEach(team => {
-      const td = document.createElement('td');
+      const td  = document.createElement('td');
       const pick = roundPickByTeam[team.id];
 
       td.className = 'board-cell';
       if (!pick) { tr.appendChild(td); return; }
 
-      const isCurrent = pick.pick_num == state.draft.current_pick_num && state.draft.status === 'active';
-      const isFilled  = !!pick.player_id;
+      const isCurrent     = pick.pick_num == state.draft.current_pick_num && state.draft.status === 'active';
+      const isFilled      = !!pick.player_id;
       const isPreassigned = isFilled && Number(pick.is_pre_assigned);
 
-      if (isCurrent) td.classList.add('is-current');
-      if (isFilled)  td.classList.add('is-filled');
-      else           td.classList.add('is-pick-slot');
+      if (isCurrent)     td.classList.add('is-current');
+      if (isFilled)      td.classList.add('is-filled');
+      else               td.classList.add('is-pick-slot');
       if (isPreassigned) { td.classList.remove('is-filled'); td.classList.add('is-preassigned'); }
 
-      // Drop target for drag-and-drop
       if (!isFilled || isPreassigned) {
-        td.addEventListener('dragover', onCellDragOver);
+        td.addEventListener('dragover',  onCellDragOver);
         td.addEventListener('dragleave', onCellDragLeave);
         td.addEventListener('drop', e => onCellDrop(e, pick.pick_num));
       }
 
       if (isFilled) {
-        td.innerHTML = `
-          <span class="cell-pick-num">#${pick.pick_num}</span>
+        td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
           <span class="cell-player">${esc(pick.player_name)}</span>
-          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto-pick</span>' : ''}
-        `;
+          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}`;
         td.title = 'Right-click to clear pick';
-        td.addEventListener('contextmenu', e => {
-          e.preventDefault();
-          clearPick(pick.pick_num);
-        });
+        td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
       } else {
-        td.innerHTML = `
-          <span class="cell-pick-num">#${pick.pick_num}</span>
-          <span class="cell-empty">${isCurrent ? 'ON THE CLOCK' : ''}</span>
-        `;
+        td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
+          ${isCurrent ? '<span class="cell-clock-label">ON THE CLOCK</span>' : ''}`;
         if (isCurrent) td.title = 'Click a player in the rankings to pick, or drag here';
       }
 
@@ -379,6 +373,26 @@ function renderBoard() {
   table.appendChild(tbody);
   wrap.innerHTML = '';
   wrap.appendChild(table);
+
+  fitBoardToScreen();
+}
+
+function fitBoardToScreen() {
+  const panel  = document.getElementById('board-panel');
+  const wrap   = document.getElementById('board-wrap');
+  const header = panel.querySelector('.board-header');
+  if (!state.draft || !panel || !header) return;
+
+  const rounds    = state.draft.total_rounds;
+  const available = panel.clientHeight - header.offsetHeight - 20; // 20px wrap padding
+  const theadEl   = wrap.querySelector('thead tr');
+  const theadH    = theadEl ? theadEl.offsetHeight + 4 : 50;
+  const spacing   = (rounds + 1) * 4; // border-spacing gaps
+  const cellH     = Math.max(38, Math.floor((available - theadH - spacing) / rounds));
+
+  wrap.querySelectorAll('tbody .board-cell').forEach(cell => {
+    cell.style.height = cellH + 'px';
+  });
 }
 
 async function clearPick(pickNum) {
@@ -678,6 +692,8 @@ function esc(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+window.addEventListener('resize', fitBoardToScreen);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {

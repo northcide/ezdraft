@@ -231,47 +231,61 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   border-collapse: separate;
   border-spacing: 4px;
   min-width: 100%;
+  table-layout: fixed;
 }
 
 /* Team header cells */
 .board-table th {
   background: var(--th-bg);
   color: var(--th-txt);
-  padding: 10px 14px;
+  padding: 8px 6px;
   text-align: center;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: .5px;
+  letter-spacing: .4px;
   border-radius: var(--radius);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   position: sticky; top: 0; z-index: 5;
+  transition: background .2s, color .2s;
 }
+/* On-the-clock team header flashes */
+.board-table th.is-on-clock {
+  animation: header-flash 1.1s ease-in-out infinite;
+}
+@keyframes header-flash {
+  0%, 100% { background: var(--cell-current-border); color: #fff; box-shadow: 0 0 0 0 rgba(202,138,4,0); }
+  50%       { background: #fde047;                   color: #78350f; box-shadow: 0 4px 16px rgba(202,138,4,.5); }
+}
+
 .board-table th.round-header {
   background: var(--th-round-bg);
   color: var(--th-round-txt);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  min-width: 36px;
-  padding: 10px 6px;
+  width: 32px;
+  min-width: 32px;
+  padding: 8px 2px;
+  animation: none;
 }
 
 /* ── Board Cells ──────────────────────────────────────────────────────────── */
 .board-cell {
   border-radius: var(--radius);
-  padding: 10px 12px;
   vertical-align: middle;
-  min-width: 140px;
-  height: 68px;
   text-align: center;
   position: relative;
+  padding: 0;
   border: 2px solid transparent;
+  overflow: hidden;
 }
 
 /* Empty slot */
 .board-cell.is-pick-slot {
   background: var(--cell-empty-bg);
-  border: 2px dashed var(--board-border);
+  border: 2px dashed #c8d0de;
   cursor: pointer;
   transition: background .12s, border-color .12s;
 }
@@ -284,96 +298,108 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .board-cell.is-current {
   background: var(--cell-current-bg) !important;
   border: 3px solid var(--cell-current-border) !important;
-  box-shadow: 0 0 0 3px rgba(202,138,4,.25), 0 2px 8px rgba(0,0,0,.12);
-  animation: current-pulse 2s ease-in-out infinite;
   cursor: pointer;
+  animation: cell-flash 1.1s ease-in-out infinite;
 }
-@keyframes current-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(202,138,4,.25), 0 2px 8px rgba(0,0,0,.12); }
-  50%       { box-shadow: 0 0 0 6px rgba(202,138,4,.15), 0 2px 12px rgba(0,0,0,.18); }
+@keyframes cell-flash {
+  0%, 100% { background: #fef08a; box-shadow: 0 0 0 2px rgba(202,138,4,.3); }
+  50%       { background: #fde047; box-shadow: 0 0 0 5px rgba(202,138,4,.18), 0 2px 14px rgba(0,0,0,.15); }
 }
 
 /* Filled (picked) slot — bold navy */
 .board-cell.is-filled {
   background: var(--cell-picked-bg);
-  border: 2px solid var(--cell-picked-bg);
+  border: 2px solid #162d4a;
 }
 
-/* Pre-assigned (before draft starts) */
+/* Pre-assigned */
 .board-cell.is-preassigned {
   background: #fefce8;
   border: 2px dashed #ca8a04;
 }
 
-/* Drag-over highlight */
+/* Drag-over */
 .board-cell.drop-target {
   background: #dbeafe !important;
   border: 2px solid var(--accent) !important;
 }
 
-/* ── Cell Content ─────────────────────────────────────────────────────────── */
-.cell-player {
-  display: block;
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--cell-picked-txt);
-  line-height: 1.2;
-  letter-spacing: .1px;
-}
-.cell-pick-num {
-  display: block;
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(255,255,255,.55);
-  margin-bottom: 3px;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
-.cell-auto {
-  display: block;
-  font-size: 10px;
-  color: rgba(255,255,255,.5);
-  font-style: italic;
-  margin-top: 2px;
-}
-/* pick-num for empty / current cells */
-.board-cell.is-pick-slot .cell-pick-num,
-.board-cell.is-current   .cell-pick-num {
-  color: var(--text3);
-}
-.board-cell.is-current .cell-pick-num { color: #92400e; }
-
-.cell-empty {
-  font-size: 12px;
-  color: var(--text3);
-  font-style: italic;
-}
-.board-cell.is-current .cell-empty {
-  font-size: 13px;
-  font-weight: 700;
-  color: #92400e;
-  font-style: normal;
-  letter-spacing: .3px;
-}
-
-/* Pre-assign cell text */
-.board-cell.is-preassigned .cell-player {
-  color: #92400e;
-  font-size: 15px;
-}
-.board-cell.is-preassigned .cell-pick-num { color: var(--text3); }
-
-/* Round number column */
+/* Round column */
 .board-cell.round-cell {
   background: var(--th-round-bg);
   border: 2px solid var(--board-border);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text2);
-  text-align: center;
-  min-width: 36px;
-  width: 36px;
-  padding: 4px;
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+/* ── Cell Content ─────────────────────────────────────────────────────────── */
+
+/* Pick number — tiny absolute corner label */
+.cell-pick-num {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255,255,255,.45);
+  letter-spacing: .3px;
+}
+.board-cell.is-pick-slot .cell-pick-num,
+.board-cell.is-current   .cell-pick-num,
+.board-cell.is-preassigned .cell-pick-num {
+  color: rgba(0,0,0,.3);
+}
+
+/* Player name — fills the cell, vertically centered */
+.cell-player {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 2px 6px;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--cell-picked-txt);
+  line-height: 1.15;
+  letter-spacing: .1px;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Auto-pick badge — bottom of cell */
+.cell-auto {
+  position: absolute;
+  bottom: 2px;
+  right: 5px;
+  font-size: 9px;
+  color: rgba(255,255,255,.4);
+  font-style: italic;
+}
+
+/* Pre-assign player name */
+.board-cell.is-preassigned .cell-player {
+  color: #92400e;
+  font-size: 13px;
+}
+
+/* "ON THE CLOCK" label inside flashing cell */
+.cell-clock-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #92400e;
+  letter-spacing: .8px;
+  text-transform: uppercase;
 }
 
 /* ── Pick Announcement ────────────────────────────────────────────────────── */
@@ -408,8 +434,8 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #rankings-panel { width: 200px; }
-  .board-cell { min-width: 110px; height: 58px; }
-  .cell-player { font-size: 14px; }
+  .cell-player { font-size: 13px; }
+  .board-table th { font-size: 12px; }
 }
 @media (max-width: 600px) {
   .admin-sections { flex-direction: column; }
