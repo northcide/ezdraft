@@ -480,18 +480,24 @@ function renderReorderList() {
       const destIdx = Number(row.dataset.idx);
       if (reorderDragSrcIdx === null || reorderDragSrcIdx === destIdx) return;
 
-      // Reorder in place
       const sorted = [...state.players].sort((a, b) => a.rank - b.rank);
+      const movedName = sorted[reorderDragSrcIdx].name;
+      const targetName = sorted[destIdx].name;
+      const newRank = destIdx + 1;
+
+      if (!confirm(`Move "${movedName}" to rank #${newRank} (before "${targetName}")?`)) {
+        reorderDragSrcIdx = null;
+        return;
+      }
+
       const [moved] = sorted.splice(reorderDragSrcIdx, 1);
       sorted.splice(destIdx, 0, moved);
 
-      // Optimistically update state and re-render immediately
       sorted.forEach((p, i) => { p.rank = i + 1; });
       state.players = sorted;
       renderReorderList();
       renderRankings();
 
-      // Persist
       try {
         const ids = sorted.map(p => p.id);
         await api(API.players, 'reorder', ids);
