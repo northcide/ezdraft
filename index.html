@@ -8,6 +8,22 @@
 </head>
 <body>
 
+<!-- Login Overlay -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">⚾ EasyDraft</div>
+    <h1 id="login-league-name" class="login-league"></h1>
+    <div id="login-error" class="login-error hidden"></div>
+    <form id="login-form" autocomplete="off">
+      <label class="login-label">League Name</label>
+      <input id="login-league" type="text" class="login-input" placeholder="Enter your league name" autocomplete="off">
+      <label class="login-label">PIN</label>
+      <input id="login-pin" type="password" class="login-input" placeholder="Enter PIN" autocomplete="new-password">
+      <button type="submit" class="login-btn">Sign In</button>
+    </form>
+  </div>
+</div>
+
 <!-- Pick Announcement Overlay -->
 <div id="announcement" class="announcement hidden">
   <div class="announcement-inner">
@@ -35,7 +51,9 @@
       </div>
     </div>
     <div class="topbar-right">
-      <button id="btn-admin" class="btn btn-secondary">⚙ Admin</button>
+      <span id="topbar-role" class="topbar-role"></span>
+      <button id="btn-admin" class="btn btn-secondary admin-only">⚙ Admin</button>
+      <button id="btn-logout" class="btn btn-secondary">Sign Out</button>
     </div>
   </header>
 

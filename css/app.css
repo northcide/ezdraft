@@ -482,6 +482,48 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   to   { transform: scale(1);   opacity: 1; }
 }
 
+/* ── Login Overlay ────────────────────────────────────────────────────────── */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: #0f1a2e;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.login-overlay.hidden { display: none !important; }
+
+.login-card {
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.35);
+  padding: 44px 48px; width: 100%; max-width: 420px;
+  text-align: center;
+}
+.login-logo   { font-size: 32px; font-weight: 900; color: var(--th-bg); margin-bottom: 6px; }
+.login-league { font-size: 16px; font-weight: 600; color: var(--text2); margin-bottom: 28px; min-height: 24px; }
+.login-label  { display: block; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text2); margin: 14px 0 4px; }
+.login-input  {
+  width: 100%; padding: 11px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 15px; color: var(--text);
+  background: var(--bg3);
+}
+.login-input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.login-btn {
+  width: 100%; margin-top: 24px; padding: 13px;
+  background: var(--th-bg); color: #fff; border: none; border-radius: var(--radius);
+  font-size: 16px; font-weight: 800; cursor: pointer; letter-spacing: .3px;
+  transition: background .15s;
+}
+.login-btn:hover { background: #162d4a; }
+.login-error {
+  background: #fee2e2; color: #991b1b; border-radius: var(--radius);
+  padding: 9px 14px; font-size: 13px; margin-top: 12px; text-align: left;
+}
+
+/* Topbar role label */
+.topbar-role { font-size: 12px; color: rgba(255,255,255,.6); font-style: italic; }
+
+/* Coach view: board fills full width */
+body.role-coach #rankings-panel { display: none; }
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #rankings-panel { width: 200px; }

@@ -1,194 +1,154 @@
 <?php
 require_once __DIR__ . '/helpers.php';
+requireAuth();
 
 $action = getAction();
 
 try {
-    $db = dbLoad();
+    $db = getDB();
 
     if ($action === 'list') {
-        $players = $db['players'];
-
-        if (isset($_GET['position']) && $_GET['position'] !== '') {
-            $pos = $_GET['position'];
-            $players = array_values(array_filter($players, fn($p) => $p['position'] === $pos));
-        }
-        if (isset($_GET['coaches_kid']) && $_GET['coaches_kid'] !== '') {
-            $ck = (int)$_GET['coaches_kid'];
-            $players = array_values(array_filter($players, fn($p) => (int)$p['is_coaches_kid'] === $ck));
-        }
-        if (isset($_GET['age']) && $_GET['age'] !== '') {
-            $age = (int)$_GET['age'];
-            $players = array_values(array_filter($players, fn($p) => (int)$p['age'] === $age));
-        }
-
-        usort($players, fn($a, $b) => $a['rank'] <=> $b['rank']);
-        jsonResponse($players);
-
-    } elseif ($action === 'get') {
-        $id = (int)($_GET['id'] ?? 0);
-        $player = current(array_filter($db['players'], fn($p) => $p['id'] === $id));
-        if (!$player) jsonError('Player not found', 404);
-        jsonResponse($player);
+        $sql    = 'SELECT * FROM players ORDER BY `rank` ASC';
+        $stmt   = $db->query($sql);
+        jsonResponse($stmt->fetchAll());
 
     } elseif ($action === 'create') {
+        requireAdmin();
         $data = getInput();
         if (empty($data['name'])) jsonError('name is required');
-        if (!isset($data['rank'])) jsonError('rank is required');
-
-        $player = [
-            'id'            => nextId($db['players']),
-            'name'          => $data['name'],
-            'rank'          => (int)$data['rank'],
-            'position'      => $data['position'] ?? null,
-            'is_coaches_kid'=> (int)($data['is_coaches_kid'] ?? 0),
-            'age'           => isset($data['age']) ? (int)$data['age'] : null,
-            'notes'         => $data['notes'] ?? null,
-            'created_at'    => nowUtc(),
-        ];
-        $db['players'][] = $player;
-        dbSave($db);
-        jsonResponse($player, 201);
+        $stmt = $db->prepare(
+            'INSERT INTO players (name, `rank`, position, is_coaches_kid, age, notes)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $data['name'],
+            (int)($data['rank'] ?? 1),
+            $data['position'] ?? null,
+            (int)($data['is_coaches_kid'] ?? 0),
+            isset($data['age']) ? (int)$data['age'] : null,
+            $data['notes'] ?? null,
+        ]);
+        $id   = $db->lastInsertId();
+        $stmt = $db->prepare('SELECT * FROM players WHERE id = ?');
+        $stmt->execute([$id]);
+        jsonResponse($stmt->fetch(), 201);
 
     } elseif ($action === 'update') {
+        requireAdmin();
         $data = getInput();
         if (empty($data['id'])) jsonError('id is required');
-        $id = (int)$data['id'];
-        foreach ($db['players'] as &$p) {
-            if ($p['id'] === $id) {
-                $p['name']           = $data['name'] ?? $p['name'];
-                $p['rank']           = isset($data['rank']) ? (int)$data['rank'] : $p['rank'];
-                $p['position']       = $data['position'] ?? $p['position'];
-                $p['is_coaches_kid'] = (int)($data['is_coaches_kid'] ?? $p['is_coaches_kid']);
-                $p['age']            = isset($data['age']) ? (int)$data['age'] : $p['age'];
-                $p['notes']          = $data['notes'] ?? $p['notes'];
-                break;
-            }
-        }
-        unset($p);
-        dbSave($db);
+        $db->prepare(
+            'UPDATE players SET name=?, `rank`=?, position=?, is_coaches_kid=?, age=?, notes=? WHERE id=?'
+        )->execute([
+            $data['name'],
+            (int)$data['rank'],
+            $data['position'] ?? null,
+            (int)($data['is_coaches_kid'] ?? 0),
+            isset($data['age']) ? (int)$data['age'] : null,
+            $data['notes'] ?? null,
+            (int)$data['id'],
+        ]);
         jsonResponse(['success' => true]);
 
     } elseif ($action === 'delete') {
+        requireAdmin();
         $data = getInput();
         if (empty($data['id'])) jsonError('id is required');
-        $id = (int)$data['id'];
-        $db['players'] = array_values(array_filter($db['players'], fn($p) => $p['id'] !== $id));
-        dbSave($db);
+        $db->prepare('DELETE FROM players WHERE id=?')->execute([(int)$data['id']]);
         jsonResponse(['success' => true]);
 
+    } elseif ($action === 'reorder') {
+        requireAdmin();
+        $ids = getInput(); // ordered array of ids
+        if (!is_array($ids)) jsonError('Expected array of ids');
+        $stmt = $db->prepare('UPDATE players SET `rank`=? WHERE id=?');
+        $db->beginTransaction();
+        foreach ($ids as $pos => $id) {
+            $stmt->execute([$pos + 1, (int)$id]);
+        }
+        $db->commit();
+        jsonResponse(['success' => true]);
+
+    } elseif ($action === 'bulk_names') {
+        requireAdmin();
+        $data      = getInput();
+        $names     = $data['names'] ?? [];
+        $replace   = !empty($data['replace']);
+        if (!is_array($names)) jsonError('names must be an array');
+
+        $db->beginTransaction();
+        if ($replace) $db->exec('DELETE FROM players');
+
+        $maxRank = (int)$db->query('SELECT COALESCE(MAX(`rank`),0) FROM players')->fetchColumn();
+        $stmt    = $db->prepare(
+            'INSERT INTO players (name, `rank`) VALUES (?, ?)'
+        );
+        $imported = 0;
+        foreach ($names as $name) {
+            $name = trim($name);
+            if ($name === '') continue;
+            $stmt->execute([$name, $maxRank + $imported + 1]);
+            $imported++;
+        }
+        $db->commit();
+        jsonResponse(['imported' => $imported]);
+
     } elseif ($action === 'import') {
+        requireAdmin();
         if (empty($_FILES['csv'])) jsonError('No CSV file uploaded');
 
-        $file   = $_FILES['csv']['tmp_name'];
-        $handle = fopen($file, 'r');
-        if (!$handle) jsonError('Could not read uploaded file');
+        $handle = fopen($_FILES['csv']['tmp_name'], 'r');
+        if (!$handle) jsonError('Could not read file');
 
-        $headers = fgetcsv($handle);
-        if (!$headers) { fclose($handle); jsonError('CSV file is empty'); }
-        $headers = array_map(fn($h) => strtolower(trim($h)), $headers);
-
+        $headers = array_map(fn($h) => strtolower(trim($h)), fgetcsv($handle) ?: []);
         if (!in_array('name', $headers, true)) {
-            fclose($handle);
-            jsonError("CSV missing required column: name");
+            fclose($handle); jsonError('CSV missing required column: name');
         }
+        $col = array_flip($headers);
 
-        $col      = array_flip($headers);
-        $imported = 0;
-        $errors   = [];
-        $row      = 1;
-        // Start ranks after any existing players
-        $startRank = empty($db['players']) ? 1 : max(array_column($db['players'], 'rank')) + 1;
+        $db->beginTransaction();
+        $maxRank  = (int)$db->query('SELECT COALESCE(MAX(`rank`),0) FROM players')->fetchColumn();
+        $stmt     = $db->prepare(
+            'INSERT INTO players (name, `rank`, position, is_coaches_kid, age, notes) VALUES (?,?,?,?,?,?)'
+        );
+        $imported = 0; $errors = []; $row = 1;
 
         while (($line = fgetcsv($handle)) !== false) {
             $row++;
             $name = trim($line[$col['name']] ?? '');
-            if ($name === '') {
-                $errors[] = "Row $row: missing name";
-                continue;
-            }
-            // Use explicit rank column if present, otherwise use row order
+            if ($name === '') { $errors[] = "Row $row: missing name"; continue; }
+
             $rank = isset($col['rank']) && trim($line[$col['rank']]) !== ''
                 ? (int)trim($line[$col['rank']])
-                : $startRank + $imported;
+                : $maxRank + $imported + 1;
+
             $ck = 0;
             if (isset($col['coaches_kid'])) {
                 $v  = strtolower(trim($line[$col['coaches_kid']]));
                 $ck = in_array($v, ['1','yes','true','y'], true) ? 1 : 0;
             }
-            $db['players'][] = [
-                'id'             => nextId($db['players']),
-                'name'           => $name,
-                'rank'           => $rank,
-                'position'       => isset($col['position']) ? (trim($line[$col['position']]) ?: null) : null,
-                'is_coaches_kid' => $ck,
-                'age'            => isset($col['age']) ? ((int)trim($line[$col['age']]) ?: null) : null,
-                'notes'          => isset($col['notes']) ? (trim($line[$col['notes']]) ?: null) : null,
-                'created_at'     => nowUtc(),
-            ];
+            $stmt->execute([
+                $name, $rank,
+                isset($col['position']) ? (trim($line[$col['position']]) ?: null) : null,
+                $ck,
+                isset($col['age']) ? ((int)trim($line[$col['age']]) ?: null) : null,
+                isset($col['notes']) ? (trim($line[$col['notes']]) ?: null) : null,
+            ]);
             $imported++;
         }
+        $db->commit();
         fclose($handle);
-        dbSave($db);
         jsonResponse(['imported' => $imported, 'errors' => $errors]);
 
-    } elseif ($action === 'reorder') {
-        // Accept ordered array of ids: [3, 1, 5, 2, ...] — index+1 becomes the new rank
-        $data = getInput();
-        if (!is_array($data)) jsonError('Expected array of ids');
-        $rankMap = [];
-        foreach ($data as $pos => $id) {
-            $rankMap[(int)$id] = $pos + 1;
-        }
-        foreach ($db['players'] as &$p) {
-            if (isset($rankMap[$p['id']])) {
-                $p['rank'] = $rankMap[$p['id']];
-            }
-        }
-        unset($p);
-        dbSave($db);
-        jsonResponse(['success' => true]);
-
-    } elseif ($action === 'bulk_names') {
-        // Accept {names: ["Name 1", "Name 2", ...], replace: true}
-        // Ranking is determined by position in the array (index 0 = rank 1)
-        $data = getInput();
-        if (empty($data['names']) || !is_array($data['names'])) jsonError('names array is required');
-
-        if (!empty($data['replace'])) {
-            $db['players'] = [];
-        }
-
-        $startRank = empty($db['players']) ? 1 : max(array_column($db['players'], 'rank')) + 1;
-        $imported  = 0;
-
-        foreach ($data['names'] as $i => $name) {
-            $name = trim($name);
-            if ($name === '') continue;
-            $db['players'][] = [
-                'id'             => nextId($db['players']),
-                'name'           => $name,
-                'rank'           => $startRank + $imported,
-                'position'       => null,
-                'is_coaches_kid' => 0,
-                'age'            => null,
-                'notes'          => null,
-                'created_at'     => nowUtc(),
-            ];
-            $imported++;
-        }
-        dbSave($db);
-        jsonResponse(['imported' => $imported]);
-
     } elseif ($action === 'clear_all') {
-        $db['players'] = [];
-        dbSave($db);
+        requireAdmin();
+        $db->exec('DELETE FROM players');
         jsonResponse(['success' => true]);
 
     } else {
         jsonError('Unknown action', 404);
     }
 
-} catch (Exception $e) {
-    jsonError('Error: ' . $e->getMessage(), 500);
+} catch (PDOException $e) {
+    jsonError('Database error: ' . $e->getMessage(), 500);
 }

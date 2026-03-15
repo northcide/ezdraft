@@ -5,21 +5,83 @@ const API = {
   players: 'api/players.php',
   teams:   'api/teams.php',
   drafts:  'api/drafts.php',
+  auth:    'api/auth.php',
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
 const state = {
-  draft:       null,
-  picks:       [],
-  teams:       [],
-  players:     [],
-  serverOffset: 0, // ms diff: local - server
+  draft:        null,
+  picks:        [],
+  teams:        [],
+  players:      [],
+  role:         '',   // 'admin' | 'coach'
+  leagueName:   '',
+  serverOffset: 0,
   pollInterval: null,
   timerInterval: null,
-  timerMax: 0,      // full timer in seconds
+  timerMax: 0,
   announcementTimeout: null,
   dragPlayerId: null,
 };
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function checkAuth() {
+  try {
+    const data = await api(API.auth, 'check');
+    state.role       = data.role;
+    state.leagueName = data.league_name;
+    applyRole();
+    document.getElementById('login-overlay').classList.add('hidden');
+    return true;
+  } catch (_) {
+    showLogin();
+    return false;
+  }
+}
+
+function showLogin() {
+  document.getElementById('login-overlay').classList.remove('hidden');
+}
+
+function applyRole() {
+  const isAdmin = state.role === 'admin';
+  // Show/hide admin-only elements
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.classList.toggle('hidden', !isAdmin);
+  });
+  // Coach view: hide rankings panel, full-width board
+  document.getElementById('rankings-panel').classList.toggle('hidden', !isAdmin);
+  document.getElementById('topbar-role').textContent =
+    isAdmin ? '(Admin)' : '(Coach — view only)';
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const league = document.getElementById('login-league').value.trim();
+  const pin    = document.getElementById('login-pin').value.trim();
+  const errEl  = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  try {
+    const data = await api(API.auth, 'login', { league_name: league, pin });
+    state.role       = data.role;
+    state.leagueName = data.league_name;
+    applyRole();
+    document.getElementById('login-overlay').classList.add('hidden');
+    await init();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  await api(API.auth, 'logout', {});
+  stopTimer();
+  stopPolling();
+  state.role = '';
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('admin-panel').classList.add('hidden');
+});
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function api(endpoint, action, body = null, method = null) {
@@ -70,6 +132,7 @@ function applyState(data) {
   state.picks   = data.picks || [];
   state.teams   = data.teams || [];
   state.players = data.players || [];
+  if (data.role) state.role = data.role;
 
   // Keep timerMax in sync with configured pick duration
   if (state.draft) state.timerMax = state.draft.timer_minutes * 60;
@@ -777,20 +840,25 @@ function esc(str) {
 window.addEventListener('resize', fitBoardToScreen);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-(async () => {
-  // Load teams for the admin panel before full state
-  try {
-    const teams = await api(API.teams, 'list');
-    state.teams = teams;
-    renderTeamList();
-  } catch (_) {}
+async function init() {
+  if (state.role === 'admin') {
+    try {
+      const teams = await api(API.teams, 'list');
+      state.teams = teams;
+      renderTeamList();
+    } catch (_) {}
+  }
 
   await fetchState();
 
-  // If draft active, kick off timer + polling
   if (state.draft?.status === 'active') {
     state.timerMax = state.draft.timer_minutes * 60;
     startPolling();
     startTimer();
   }
+}
+
+(async () => {
+  const authed = await checkAuth();
+  if (authed) await init();
 })();
