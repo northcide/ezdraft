@@ -68,7 +68,7 @@ try {
         }
         $end = (new DateTime('now', new DateTimeZone('UTC')))
             ->modify('+' . $draft['timer_minutes'] . ' minutes')
-            ->format('Y-m-d\TH:i:s\Z');
+            ->format('Y-m-d H:i:s');
         $db->prepare('UPDATE drafts SET timer_end=?, timer_remaining_seconds=NULL WHERE id=?')
            ->execute([$end, $draft['id']]);
     }
@@ -142,6 +142,11 @@ try {
             } else {
                 $accessibleDrafts = [];
             }
+        }
+
+        // Append Z so JS parses timer_end as UTC (MySQL stores without timezone)
+        if ($draft && $draft['timer_end']) {
+            $draft['timer_end'] = str_replace(' ', 'T', $draft['timer_end']) . 'Z';
         }
 
         return [
@@ -294,7 +299,7 @@ try {
         if ($draft['auto_pick_enabled'] && $draft['timer_remaining_seconds'] !== null) {
             $timerEnd = (new DateTime('now', new DateTimeZone('UTC')))
                 ->modify('+' . $draft['timer_remaining_seconds'] . ' seconds')
-                ->format('Y-m-d\TH:i:s\Z');
+                ->format('Y-m-d H:i:s');
         }
         $db->prepare("UPDATE drafts SET status='active', timer_end=?, timer_remaining_seconds=NULL WHERE id=?")
            ->execute([$timerEnd, $draft['id']]);
