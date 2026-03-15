@@ -137,6 +137,8 @@ async function fetchState() {
 }
 
 function applyState(data) {
+  const prevStatus = state.draft?.status;
+
   // Detect newly filled picks for coaches — they don't trigger makePick themselves
   if (state.role === 'coach') {
     const oldFilled = new Set((state.picks || []).filter(p => p.player_id).map(p => p.pick_num));
@@ -157,6 +159,10 @@ function applyState(data) {
   if (data.selectedDraftId !== undefined) state.selectedDraftId = data.selectedDraftId;
 
   if (state.draft) state.timerMax = state.draft.timer_minutes * 60;
+
+  // Detect draft just completed
+  const justCompleted = state.draft?.status === 'completed' && prevStatus === 'active';
+  if (justCompleted) showDraftComplete();
 
   // Update board title
   const boardTitle = document.getElementById('board-draft-name');
@@ -205,19 +211,16 @@ function renderAdminDraftSelector() {
   const delBtn  = document.getElementById('btn-delete-draft');
   const content = document.getElementById('draft-content');
 
-  const controls = document.getElementById('draft-controls-inline');
   if (state.draft && state.selectedDraftId) {
     badge.className = `badge badge-${state.draft.status}`;
     badge.textContent = state.draft.status;
     badge.classList.remove('hidden');
     delBtn.classList.toggle('hidden', state.draft.status === 'active');
-    if (content)   content.classList.remove('hidden');
-    if (controls) controls.classList.remove('hidden');
+    if (content) content.classList.remove('hidden');
   } else {
     badge.classList.add('hidden');
     delBtn.classList.add('hidden');
-    if (content)   content.classList.add('hidden');
-    if (controls) controls.classList.add('hidden');
+    if (content) content.classList.add('hidden');
   }
 }
 
@@ -437,11 +440,43 @@ function showAnnouncement(pick, player, isAuto = false) {
   document.getElementById('ann-player-pos').textContent  =
     (player.position || player.player_position || '') + (isAuto ? ' (auto-pick)' : '');
   el.classList.remove('hidden', 'fadeout');
+  // Force animation restart — fixes iOS Safari not re-playing on subsequent shows
+  const inner = el.querySelector('.announcement-inner');
+  el.style.animation = 'none';
+  if (inner) inner.style.animation = 'none';
+  void el.offsetWidth; // trigger reflow
+  el.style.animation = '';
+  if (inner) inner.style.animation = '';
   if (state.announcementTimeout) clearTimeout(state.announcementTimeout);
   state.announcementTimeout = setTimeout(() => {
     el.classList.add('fadeout');
     setTimeout(() => el.classList.add('hidden'), 500);
   }, 4000);
+}
+
+function showDraftComplete() {
+  // Brief full-screen overlay (replace any current announcement)
+  if (state.announcementTimeout) clearTimeout(state.announcementTimeout);
+  const el = document.getElementById('announcement');
+  el.classList.remove('fadeout');
+  document.getElementById('ann-pick-num').textContent  = '';
+  document.getElementById('ann-team-name').textContent = '\u{1F3C6} Draft Complete!';
+  document.getElementById('ann-player-name').textContent = 'Final Results';
+  document.getElementById('ann-player-pos').textContent  = 'All picks have been made';
+  el.classList.remove('hidden', 'fadeout');
+  el.style.animation = 'none';
+  const inner = el.querySelector('.announcement-inner');
+  if (inner) inner.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = '';
+  if (inner) inner.style.animation = '';
+  state.announcementTimeout = setTimeout(() => {
+    el.classList.add('fadeout');
+    setTimeout(() => el.classList.add('hidden'), 500);
+  }, 5000);
+
+  // Persistent banner (shown until draft is no longer completed)
+  document.getElementById('draft-complete-banner').classList.remove('hidden');
 }
 
 document.getElementById('announcement').addEventListener('click', () => {
@@ -665,6 +700,8 @@ function isMobileCoach() {
 function renderBoard() {
   if (isMobileCoach()) { renderMobileBoard(); return; }
   const wrap = document.getElementById('board-wrap');
+  const banner = document.getElementById('draft-complete-banner');
+  if (banner) banner.classList.toggle('hidden', state.draft?.status !== 'completed');
   if (!state.draft || state.teams.length === 0 || state.picks.length === 0) {
     wrap.innerHTML = '<div class="empty-state">' +
       (state.draft ? 'Add teams and setup pick order to see the board.' : 'Select a draft to see the board.') +
@@ -723,10 +760,10 @@ function renderBoard() {
       else               td.classList.add('is-pick-slot');
       if (isPreassigned) { td.classList.remove('is-filled'); td.classList.add('is-preassigned'); }
 
-      if (!isFilled || isPreassigned) {
+      if (state.role === 'admin') {
         td.addEventListener('dragover',  onCellDragOver);
         td.addEventListener('dragleave', onCellDragLeave);
-        td.addEventListener('drop', e => onCellDrop(e, pick.pick_num));
+        td.addEventListener('drop', e => onCellDrop(e, pick));
       }
 
       if (isFilled) {
@@ -759,10 +796,15 @@ function renderBoard() {
 function fitBoardToScreen() {
   const panel  = document.getElementById('board-panel');
   const wrap   = document.getElementById('board-wrap');
-  const header = panel.querySelector('.board-header');
-  if (!state.draft || !panel || !header) return;
+  if (!state.draft || !panel) return;
   const rounds    = state.draft.total_rounds;
-  const available = panel.clientHeight - header.offsetHeight - 20;
+  // Subtract height of every sibling before board-wrap
+  let overhead = 20;
+  for (const child of panel.children) {
+    if (child === wrap) break;
+    overhead += child.offsetHeight;
+  }
+  const available = panel.clientHeight - overhead;
   const theadEl   = wrap.querySelector('thead tr');
   const theadH    = theadEl ? theadEl.offsetHeight + 4 : 50;
   const spacing   = (rounds + 1) * 4;
@@ -790,21 +832,20 @@ function onCellDragOver(e) {
   e.currentTarget.classList.add('drop-target');
 }
 function onCellDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
-async function onCellDrop(e, pickNum) {
+async function onCellDrop(e, pick) {
   e.preventDefault(); e.currentTarget.classList.remove('drop-target');
   if (!state.dragPlayerId || !state.draft) return;
-  const isDraftActive = state.draft.status === 'active';
-  const isCurrentPick = pickNum == state.draft.current_pick_num;
-  const isFuturePick  = pickNum >  state.draft.current_pick_num;
-  const isSetup       = state.draft.status === 'setup';
-  if (isSetup || isFuturePick) {
-    try { await api(API.drafts, 'preassign', { pick_num: pickNum, player_id: state.dragPlayerId }); await fetchState(); }
-    catch (e) { alert('Pre-assign error: ' + e.message); }
-  } else if (isDraftActive && isCurrentPick) {
-    const player = state.players.find(p => Number(p.id) === state.dragPlayerId);
-    await makePick(pickNum, state.dragPlayerId, player);
-  }
+  const playerId   = state.dragPlayerId;
   state.dragPlayerId = null;
+  const player     = state.players.find(p => Number(p.id) === playerId);
+  const playerName = player?.name || `Player #${playerId}`;
+  const slotDesc   = pick.team_name ? `${pick.team_name} (pick #${pick.pick_num})` : `pick #${pick.pick_num}`;
+  const existing   = pick.player_id ? ` Replaces: ${pick.player_name}.` : '';
+  if (!confirm(`Assign ${playerName} to ${slotDesc}?${existing}`)) return;
+  try {
+    await api(API.drafts, 'force_assign', { pick_num: pick.pick_num, player_id: playerId });
+    await fetchState();
+  } catch (err) { alert('Error: ' + err.message); }
 }
 
 // ── Player Reorder ────────────────────────────────────────────────────────────
@@ -895,6 +936,9 @@ function updateControls() {
   const btnEnd        = document.getElementById('btn-end');
   const btnAutopick   = document.getElementById('btn-autopick-now');
   const btnResetPicks = document.getElementById('btn-reset-picks');
+  const bar           = document.getElementById('board-controls-bar');
+
+  if (bar) bar.classList.toggle('hidden', !state.draft);
 
   const isCompleted = status === 'completed';
   btnStart.classList.toggle('hidden', isCompleted);

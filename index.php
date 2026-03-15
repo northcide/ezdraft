@@ -59,45 +59,52 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     </div>
   </header>
 
-  <!-- Coach Draft Selector Bar (visible only for coaches with multiple drafts) -->
-  <div id="coach-draft-bar" class="coach-draft-bar hidden">
-    <span class="coach-draft-label">Viewing:</span>
-    <select id="coach-draft-selector" class="coach-draft-selector"></select>
-  </div>
+  <!-- Draft Bar: selector + title + controls — always visible -->
+  <div id="draft-bar" class="draft-bar">
 
-  <!-- Admin Panel (collapsible) -->
-  <div id="admin-panel" class="admin-panel hidden admin-only">
-
-    <!-- Draft Selector Row -->
-    <div class="draft-selector-row">
-      <div class="draft-selector-left">
-        <label class="draft-selector-label">Draft</label>
-        <select id="draft-selector" class="draft-selector-select">
-          <option value="">&#8212; Select a draft &#8212;</option>
-        </select>
-        <span id="draft-selector-badge" class="badge badge-setup hidden"></span>
-        <button id="btn-delete-draft" class="btn btn-sm btn-danger-outline hidden">Delete</button>
+    <!-- Admin: draft selector (left) -->
+    <div class="draft-bar-left admin-only">
+      <label class="draft-selector-label">Draft</label>
+      <select id="draft-selector" class="draft-selector-select">
+        <option value="">&#8212; Select a draft &#8212;</option>
+      </select>
+      <span id="draft-selector-badge" class="badge badge-setup hidden"></span>
+      <button id="btn-delete-draft" class="btn btn-sm btn-danger-outline hidden">Delete</button>
+      <div id="new-draft-inline" class="new-draft-inline hidden">
+        <input type="text" id="new-draft-name" class="input-sm" placeholder="Draft name" style="width:140px">
+        <button id="btn-confirm-new-draft" class="btn btn-sm btn-primary">Create</button>
+        <button id="btn-cancel-new-draft" class="btn btn-sm btn-secondary">Cancel</button>
       </div>
-      <div id="draft-controls-inline" class="draft-controls-inline hidden">
-        <button id="btn-start"        class="btn btn-sm btn-success" disabled>&#9654; Start</button>
-        <button id="btn-restart"      class="btn btn-sm btn-success hidden">&#9654; Restart</button>
-        <button id="btn-pause"        class="btn btn-sm btn-warning hidden">&#9646;&#9646; Pause</button>
-        <button id="btn-resume"       class="btn btn-sm btn-success hidden">&#9654; Resume</button>
-        <button id="btn-end"          class="btn btn-sm btn-danger" disabled>&#9646; End</button>
-        <button id="btn-autopick-now" class="btn btn-sm btn-secondary hidden">&#9889; Auto-pick</button>
-      </div>
-      <div class="draft-selector-right">
-        <!-- Inline new draft form, hidden by default -->
-        <div id="new-draft-inline" class="new-draft-inline hidden">
-          <input type="text" id="new-draft-name" class="input-sm" placeholder="Draft name" style="width:160px">
-          <button id="btn-confirm-new-draft" class="btn btn-sm btn-primary">Create</button>
-          <button id="btn-cancel-new-draft" class="btn btn-sm btn-secondary">Cancel</button>
-        </div>
-        <button id="btn-new-draft" class="btn btn-sm btn-primary">+ New Draft</button>
-      </div>
+      <button id="btn-new-draft" class="btn btn-sm btn-primary">+ New Draft</button>
     </div>
 
-    <!-- Draft Content (shown when a draft is selected) -->
+    <!-- Coach: draft selector (shown only when coach has multiple drafts) -->
+    <div id="coach-draft-bar" class="draft-bar-left hidden">
+      <span class="coach-draft-label">Viewing:</span>
+      <select id="coach-draft-selector" class="coach-draft-selector"></select>
+    </div>
+
+    <!-- Center: draft name + on-the-clock info / completion badge -->
+    <div class="draft-bar-center">
+      <span id="board-draft-name" class="draft-bar-name"></span>
+      <span id="current-pick-label" class="current-pick-label"></span>
+      <span id="draft-complete-banner" class="draft-complete-banner hidden">&#127942; Draft Complete &mdash; Final Results</span>
+    </div>
+
+    <!-- Admin: draft controls (right) -->
+    <div id="board-controls-bar" class="draft-bar-right admin-only hidden">
+      <button id="btn-start"        class="btn btn-sm btn-success" disabled>&#9654; Start</button>
+      <button id="btn-restart"      class="btn btn-sm btn-success hidden">&#9654; Restart</button>
+      <button id="btn-pause"        class="btn btn-sm btn-warning hidden">&#9646;&#9646; Pause</button>
+      <button id="btn-resume"       class="btn btn-sm btn-success hidden">&#9654; Resume</button>
+      <button id="btn-end"          class="btn btn-sm btn-danger" disabled>&#9646; End</button>
+      <button id="btn-autopick-now" class="btn btn-sm btn-secondary hidden">&#9889; Auto-pick</button>
+    </div>
+
+  </div>
+
+  <!-- Admin Panel (collapsible) — tabs only -->
+  <div id="admin-panel" class="admin-panel hidden admin-only">
     <div id="draft-content" class="draft-content hidden">
 
       <!-- Tab Navigation -->
@@ -193,7 +200,6 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
       </div>
 
     </div>
-
   </div>
 
   <!-- Main Content -->
@@ -227,10 +233,6 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
 
     <!-- Right: Draft Board -->
     <main id="board-panel">
-      <div class="board-header">
-        <h2 id="board-draft-name">Draft Board</h2>
-        <span id="current-pick-label" class="current-pick-label"></span>
-      </div>
       <div id="board-wrap" class="board-wrap">
         <div class="empty-state">Select a draft to see the board.</div>
       </div>

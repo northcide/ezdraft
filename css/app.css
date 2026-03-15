@@ -28,6 +28,8 @@
   --cell-pre-bg:   #fdf4e7;
   --th-bg:         #1e3a5f;
   --th-txt:        #ffffff;
+  --col-header-bg: #0e7490;  /* teal — distinct from navy topbar */
+  --col-header-txt:#ffffff;
   --th-round-bg:   #e8eaed;
   --th-round-txt:  #4a5060;
 
@@ -120,7 +122,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* ── Admin Panel ──────────────────────────────────────────────────────────── */
 .admin-panel {
   background: var(--bg2); border-bottom: 2px solid var(--border);
-  padding: 14px 20px;
+  padding: 10px 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
 }
 .admin-sections { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
@@ -277,13 +279,41 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
   background: var(--board-bg);
 }
-.board-header {
-  display: flex; align-items: center; gap: 14px;
-  padding: 10px 16px; border-bottom: 2px solid var(--border);
-  background: var(--bg3);
+/* ── Draft Bar (unified selector + title + controls) ──────────────────────── */
+#draft-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 16px; min-height: 46px;
+  background: var(--bg2); border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
 }
-.board-header h2 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text2); }
-.current-pick-label { font-size: 14px; color: var(--accent); font-weight: 700; }
+.draft-bar-left  { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+.draft-bar-center {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  justify-content: center; min-width: 0; overflow: hidden;
+}
+.draft-bar-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
+.draft-bar-name {
+  font-size: 14px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text2); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.current-pick-label { font-size: 13px; color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+.draft-complete-banner {
+  display: inline-flex; align-items: center;
+  background: linear-gradient(135deg, #065f46 0%, #0e7490 100%);
+  color: #fff;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 20px;
+  white-space: nowrap;
+  animation: complete-pulse 2s ease-in-out infinite;
+}
+@keyframes complete-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,.5); }
+  50%       { box-shadow: 0 0 10px 3px rgba(13,148,136,.6); }
+}
 
 .board-wrap { flex: 1; overflow: auto; padding: 16px; background: var(--board-bg); }
 
@@ -297,8 +327,8 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 /* Team header cells */
 .board-table th {
-  background: var(--th-bg);
-  color: var(--th-txt);
+  background: var(--col-header-bg);
+  color: var(--col-header-txt);
   padding: 8px 6px;
   text-align: center;
   font-size: 14px;
@@ -719,16 +749,7 @@ body.role-coach #rankings-panel { display: none; }
   background: #eff6ff; border-radius: 4px; padding: 1px 6px;
 }
 
-/* ── Draft Selector Row ───────────────────────────────────────────────────── */
-.draft-selector-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 0 12px; margin-bottom: 12px;
-  border-bottom: 2px solid var(--border);
-  flex-wrap: wrap; gap: 10px;
-}
-.draft-selector-row .draft-controls-inline { flex: 1; justify-content: center; }
-.draft-selector-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.draft-selector-right { display: flex; align-items: center; gap: 8px; }
+/* ── Draft Selector (inside draft-bar) ───────────────────────────────────── */
 .draft-selector-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); white-space: nowrap; }
 
 .draft-selector-select {
@@ -741,14 +762,6 @@ body.role-coach #rankings-panel { display: none; }
 
 .new-draft-inline { display: flex; align-items: center; gap: 6px; }
 
-/* ── Inline Draft Controls ────────────────────────────────────────────────── */
-.draft-controls-inline {
-  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-  padding: 5px 10px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg3);
-}
 
 /* ── Draft Content ────────────────────────────────────────────────────────── */
 .draft-content { }
@@ -759,11 +772,7 @@ body.role-coach #rankings-panel { display: none; }
 .settings-label { font-size: 12px; color: var(--text2); min-width: 100px; }
 .settings-divider { height: 1px; background: var(--border); margin: 6px 0; }
 
-/* ── Coach Draft Bar ──────────────────────────────────────────────────────── */
-.coach-draft-bar {
-  background: var(--bg2); border-bottom: 1px solid var(--border);
-  padding: 7px 20px; display: flex; align-items: center; gap: 10px;
-}
+/* .coach-draft-bar is now .draft-bar-left inside #draft-bar */
 .coach-draft-label { font-size: 12px; font-weight: 700; color: var(--text2); }
 .coach-draft-selector {
   height: 28px; padding: 0 8px;

@@ -452,6 +452,54 @@ try {
            ->execute([$playerId, $draft['id'], $pickNum]);
         jsonResponse(['success' => true]);
 
+    } elseif ($action === 'force_assign') {
+        requireAdmin();
+        $data     = getInput();
+        $draft    = getContextDraft($db);
+        if (!$draft) jsonError('No draft found');
+        $pickNum  = (int)($data['pick_num']  ?? 0);
+        $playerId = (int)($data['player_id'] ?? 0);
+        if (!$pickNum || !$playerId) jsonError('pick_num and player_id required');
+
+        $pickStmt = $db->prepare('SELECT * FROM picks WHERE draft_id=? AND pick_num=?');
+        $pickStmt->execute([$draft['id'], $pickNum]);
+        if (!$pickStmt->fetch()) jsonError('Pick slot not found');
+
+        $playerStmt = $db->prepare('SELECT id FROM players WHERE id=? AND draft_id=?');
+        $playerStmt->execute([$playerId, $draft['id']]);
+        if (!$playerStmt->fetch()) jsonError('Player not found');
+
+        // Remove player from any other slot in this draft
+        $db->prepare('UPDATE picks SET player_id=NULL, is_pre_assigned=0, is_auto_pick=0, picked_at=NULL WHERE draft_id=? AND player_id=? AND pick_num!=?')
+           ->execute([$draft['id'], $playerId, $pickNum]);
+
+        // Determine is_pre_assigned: 1 only for future slots while draft is active/paused
+        $currentPickNum = (int)$draft['current_pick_num'];
+        $isFuture       = in_array($draft['status'], ['active','paused'], true) && $pickNum > $currentPickNum;
+        $isCurrentPick  = $draft['status'] === 'active' && $pickNum == $currentPickNum;
+        $isPreAssigned  = $isFuture ? 1 : 0;
+
+        $db->prepare('UPDATE picks SET player_id=?, is_pre_assigned=?, is_auto_pick=0, picked_at=NOW() WHERE draft_id=? AND pick_num=?')
+           ->execute([$playerId, $isPreAssigned, $draft['id'], $pickNum]);
+
+        // If assigned to the current active pick, advance to next unfilled
+        if ($isCurrentPick) {
+            $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
+            $totalStmt->execute([$draft['id']]);
+            $total = (int)$totalStmt->fetchColumn();
+            $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
+            if ($next > $total) {
+                $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), current_pick_num=?, timer_end=NULL WHERE id=?")
+                   ->execute([$next, $draft['id']]);
+            } else {
+                $db->prepare('UPDATE drafts SET current_pick_num=? WHERE id=?')
+                   ->execute([$next, $draft['id']]);
+                $draft['current_pick_num'] = $next;
+                advanceTimer($db, $draft);
+            }
+        }
+        jsonResponse(['success' => true]);
+
     } elseif ($action === 'clear_pick') {
         requireAdmin();
         $data    = getInput();
