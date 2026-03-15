@@ -274,9 +274,12 @@ try {
         $pickCount = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
         $pickCount->execute([$draft['id']]);
         if (!(int)$pickCount->fetchColumn()) jsonError('Set up pick order before starting');
-        $db->prepare("UPDATE drafts SET status='active', started_at=COALESCE(started_at, NOW()) WHERE id=?")
-           ->execute([$draft['id']]);
+        // Skip any pre-assigned picks at the start
+        $firstPick = nextUnfilledPickNum($db, $draft['id'], 0);
+        $db->prepare("UPDATE drafts SET status='active', current_pick_num=?, started_at=COALESCE(started_at, NOW()) WHERE id=?")
+           ->execute([$firstPick, $draft['id']]);
         $draft['status'] = 'active';
+        $draft['current_pick_num'] = $firstPick;
         advanceTimer($db, $draft);
         jsonResponse(['success' => true]);
 
