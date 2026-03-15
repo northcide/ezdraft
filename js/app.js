@@ -192,34 +192,18 @@ document.getElementById('announcement').addEventListener('click', () => {
 
 // ── Rankings ──────────────────────────────────────────────────────────────────
 function renderRankings() {
-  const list = document.getElementById('rankings-list');
-  const filterPos    = document.getElementById('filter-position').value;
-  const filterAge    = document.getElementById('filter-age').value;
-  const filterCK     = document.getElementById('filter-coaches-kid').checked;
-  const filterAvail  = document.getElementById('filter-available').checked;
-
-  // Populate age options once
-  const ageSelect = document.getElementById('filter-age');
-  const ages = [...new Set(state.players.map(p => p.age).filter(Boolean))].sort((a,b)=>a-b);
-  const currentAge = ageSelect.value;
-  ageSelect.innerHTML = '<option value="">All Ages</option>';
-  ages.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a; opt.textContent = a;
-    if (String(a) === currentAge) opt.selected = true;
-    ageSelect.appendChild(opt);
-  });
+  const list        = document.getElementById('rankings-list');
+  const search      = document.getElementById('filter-search').value.trim().toLowerCase();
+  const filterAvail = document.getElementById('filter-available').checked;
 
   const draftedIds = new Set(state.picks.filter(p => p.player_id).map(p => Number(p.player_id)));
 
   let players = state.players;
-  if (filterPos)   players = players.filter(p => p.position === filterPos);
-  if (filterAge)   players = players.filter(p => String(p.age) === filterAge);
-  if (filterCK)    players = players.filter(p => Number(p.is_coaches_kid) === 1);
   if (filterAvail) players = players.filter(p => !draftedIds.has(Number(p.id)));
+  if (search)      players = players.filter(p => p.name.toLowerCase().includes(search));
 
   if (players.length === 0) {
-    list.innerHTML = '<div class="empty-state">No players match filters.</div>';
+    list.innerHTML = '<div class="empty-state">No players match.</div>';
     return;
   }
 
@@ -233,11 +217,6 @@ function renderRankings() {
     card.innerHTML = `
       <span class="player-rank">#${p.rank}</span>
       <span class="player-name">${esc(p.name)}</span>
-      <span class="player-meta">
-        ${p.position ? `<span class="player-pos">${esc(p.position)}</span>` : ''}
-        ${Number(p.is_coaches_kid) ? '<span class="player-ck">★CK</span>' : ''}
-        ${p.age ? `<span class="player-age">${esc(String(p.age))}</span>` : ''}
-      </span>
     `;
 
     if (!drafted) {
@@ -618,9 +597,8 @@ document.getElementById('btn-autopick-now').addEventListener('click', async () =
 });
 
 // Filter listeners
-['filter-position','filter-age','filter-coaches-kid','filter-available'].forEach(id => {
-  document.getElementById(id).addEventListener('change', renderRankings);
-});
+document.getElementById('filter-search').addEventListener('input', renderRankings);
+document.getElementById('filter-available').addEventListener('change', renderRankings);
 
 // Import tab switching
 document.querySelectorAll('.import-tab').forEach(tab => {
