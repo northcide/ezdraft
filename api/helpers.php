@@ -23,9 +23,17 @@ function dbLoad(): array {
 function dbSave(array $data): void {
     $dir = dirname(DB_FILE);
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException("Cannot create data directory: $dir");
+        }
     }
-    file_put_contents(DB_FILE, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
+    if (!is_writable($dir)) {
+        throw new RuntimeException("Data directory is not writable: $dir — run: sudo chown www-data:www-data $dir");
+    }
+    $result = file_put_contents(DB_FILE, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
+    if ($result === false) {
+        throw new RuntimeException("Failed to write data file: " . DB_FILE);
+    }
 }
 
 function nextId(array $rows): int {

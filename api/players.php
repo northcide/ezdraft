@@ -88,26 +88,29 @@ try {
         if (!$headers) { fclose($handle); jsonError('CSV file is empty'); }
         $headers = array_map(fn($h) => strtolower(trim($h)), $headers);
 
-        foreach (['name', 'rank'] as $req) {
-            if (!in_array($req, $headers, true)) {
-                fclose($handle);
-                jsonError("CSV missing required column: $req");
-            }
+        if (!in_array('name', $headers, true)) {
+            fclose($handle);
+            jsonError("CSV missing required column: name");
         }
 
         $col      = array_flip($headers);
         $imported = 0;
         $errors   = [];
         $row      = 1;
+        // Start ranks after any existing players
+        $startRank = empty($db['players']) ? 1 : max(array_column($db['players'], 'rank')) + 1;
 
         while (($line = fgetcsv($handle)) !== false) {
             $row++;
             $name = trim($line[$col['name']] ?? '');
-            $rank = trim($line[$col['rank']] ?? '');
-            if ($name === '' || $rank === '') {
-                $errors[] = "Row $row: missing name or rank";
+            if ($name === '') {
+                $errors[] = "Row $row: missing name";
                 continue;
             }
+            // Use explicit rank column if present, otherwise use row order
+            $rank = isset($col['rank']) && trim($line[$col['rank']]) !== ''
+                ? (int)trim($line[$col['rank']])
+                : $startRank + $imported;
             $ck = 0;
             if (isset($col['coaches_kid'])) {
                 $v  = strtolower(trim($line[$col['coaches_kid']]));
@@ -116,7 +119,7 @@ try {
             $db['players'][] = [
                 'id'             => nextId($db['players']),
                 'name'           => $name,
-                'rank'           => (int)$rank,
+                'rank'           => $rank,
                 'position'       => isset($col['position']) ? (trim($line[$col['position']]) ?: null) : null,
                 'is_coaches_kid' => $ck,
                 'age'            => isset($col['age']) ? ((int)trim($line[$col['age']]) ?: null) : null,
@@ -128,6 +131,37 @@ try {
         fclose($handle);
         dbSave($db);
         jsonResponse(['imported' => $imported, 'errors' => $errors]);
+
+    } elseif ($action === 'bulk_names') {
+        // Accept {names: ["Name 1", "Name 2", ...], replace: true}
+        // Ranking is determined by position in the array (index 0 = rank 1)
+        $data = getInput();
+        if (empty($data['names']) || !is_array($data['names'])) jsonError('names array is required');
+
+        if (!empty($data['replace'])) {
+            $db['players'] = [];
+        }
+
+        $startRank = empty($db['players']) ? 1 : max(array_column($db['players'], 'rank')) + 1;
+        $imported  = 0;
+
+        foreach ($data['names'] as $i => $name) {
+            $name = trim($name);
+            if ($name === '') continue;
+            $db['players'][] = [
+                'id'             => nextId($db['players']),
+                'name'           => $name,
+                'rank'           => $startRank + $imported,
+                'position'       => null,
+                'is_coaches_kid' => 0,
+                'age'            => null,
+                'notes'          => null,
+                'created_at'     => nowUtc(),
+            ];
+            $imported++;
+        }
+        dbSave($db);
+        jsonResponse(['imported' => $imported]);
 
     } elseif ($action === 'clear_all') {
         $db['players'] = [];

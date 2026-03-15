@@ -618,6 +618,38 @@ document.getElementById('btn-autopick-now').addEventListener('click', async () =
   document.getElementById(id).addEventListener('change', renderRankings);
 });
 
+// Import tab switching
+document.querySelectorAll('.import-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.import-tab-panel').forEach(p => p.classList.add('hidden'));
+    tab.classList.add('active');
+    document.getElementById('import-tab-' + tab.dataset.tab).classList.remove('hidden');
+  });
+});
+
+// Paste import
+document.getElementById('btn-paste-import').addEventListener('click', async () => {
+  const textarea = document.getElementById('paste-names');
+  const result   = document.getElementById('import-result');
+  const names = textarea.value.split('\n').map(n => n.trim()).filter(Boolean);
+  if (!names.length) {
+    result.textContent = 'Paste at least one name.';
+    result.className = 'import-result error';
+    return;
+  }
+  try {
+    const data = await api(API.players, 'bulk_names', { names, replace: true });
+    result.textContent = `Imported ${data.imported} players.`;
+    result.className = 'import-result';
+    textarea.value = '';
+    await fetchState();
+  } catch (e) {
+    result.textContent = 'Import failed: ' + e.message;
+    result.className = 'import-result error';
+  }
+});
+
 // CSV Import
 document.getElementById('btn-import').addEventListener('click', async () => {
   const fileInput = document.getElementById('csv-file');

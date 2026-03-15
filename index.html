@@ -83,14 +83,30 @@
       </section>
 
       <!-- Player Import -->
-      <section class="admin-section">
-        <h3>Import Players (CSV)</h3>
-        <p class="help-text">CSV columns: <code>name, rank, position, age, coaches_kid</code></p>
-        <div class="admin-row">
-          <input type="file" id="csv-file" accept=".csv">
-          <button id="btn-import" class="btn btn-primary">Import</button>
-          <button id="btn-clear-players" class="btn btn-danger-outline">Clear All Players</button>
+      <section class="admin-section admin-section-wide">
+        <h3>Import Players</h3>
+        <div class="import-tabs">
+          <button class="import-tab active" data-tab="paste">Paste List</button>
+          <button class="import-tab" data-tab="csv">CSV File</button>
         </div>
+
+        <div id="import-tab-paste" class="import-tab-panel">
+          <p class="help-text">One name per line — order determines ranking (line 1 = rank 1).</p>
+          <textarea id="paste-names" class="paste-textarea" placeholder="John Smith&#10;Jane Doe&#10;Mike Johnson&#10;..."></textarea>
+          <div class="admin-row">
+            <button id="btn-paste-import" class="btn btn-primary">Import List</button>
+            <button id="btn-clear-players" class="btn btn-danger-outline">Clear All Players</button>
+          </div>
+        </div>
+
+        <div id="import-tab-csv" class="import-tab-panel hidden">
+          <p class="help-text">CSV columns: <code>name, rank, position, age, coaches_kid</code> — order of rows determines ranking.</p>
+          <div class="admin-row">
+            <input type="file" id="csv-file" accept=".csv">
+            <button id="btn-import" class="btn btn-primary">Import CSV</button>
+          </div>
+        </div>
+
         <div id="import-result" class="import-result"></div>
       </section>
 
