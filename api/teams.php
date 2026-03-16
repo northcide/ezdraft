@@ -60,6 +60,14 @@ try {
         $db->commit();
         jsonResponse(['success' => true]);
 
+    } elseif ($action === 'set_pin') {
+        requireAdmin();
+        $data = getInput();
+        if (empty($data['id'])) jsonError('id is required');
+        $pin = trim($data['pin'] ?? '') ?: null;
+        $db->prepare('UPDATE teams SET pin=? WHERE id=?')->execute([$pin, (int)$data['id']]);
+        jsonResponse(['success' => true]);
+
     } elseif ($action === 'clear_all') {
         requireAdmin();
         $draftId = contextDraftId($db);

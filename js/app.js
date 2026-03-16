@@ -1188,8 +1188,38 @@ function renderTeamList() {
   state.teams.forEach(t => {
     const item = document.createElement('div');
     item.className = 'team-item';
-    item.innerHTML = `<span class="team-order">${t.draft_order}.</span><span class="team-name">${esc(t.name)}</span><button class="btn-delete" title="Remove" data-id="${t.id}">\u2715</button>`;
-    item.querySelector('.btn-delete').addEventListener('click', () => deleteTeam(t.id));
+
+    if (state.role === 'admin') {
+      item.innerHTML =
+        `<span class="team-order">${t.draft_order}.</span>` +
+        `<span class="team-name">${esc(t.name)}</span>` +
+        `<input type="text" class="team-pin-input input-sm" placeholder="PIN" value="${esc(t.pin || '')}" title="Team login PIN">` +
+        `<button class="team-pin-set btn btn-sm btn-secondary">Set</button>` +
+        `<button class="btn-delete" title="Remove">\u2715</button>`;
+
+      const pinInput = item.querySelector('.team-pin-input');
+      const pinBtn   = item.querySelector('.team-pin-set');
+
+      const savePin = async () => {
+        const pin = pinInput.value.trim();
+        try {
+          await api(API.teams, 'set_pin', { id: t.id, pin });
+          pinBtn.textContent = '✓';
+          pinBtn.classList.add('btn-success');
+          setTimeout(() => { pinBtn.textContent = 'Set'; pinBtn.classList.remove('btn-success'); }, 1500);
+          // Update local state so re-renders reflect the new pin
+          const team = state.teams.find(x => x.id === t.id);
+          if (team) team.pin = pin || null;
+        } catch (e) { alert('Error: ' + e.message); }
+      };
+
+      pinBtn.addEventListener('click', savePin);
+      pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') savePin(); });
+      item.querySelector('.btn-delete').addEventListener('click', () => deleteTeam(t.id));
+    } else {
+      item.innerHTML = `<span class="team-order">${t.draft_order}.</span><span class="team-name">${esc(t.name)}</span>`;
+    }
+
     list.appendChild(item);
   });
 }

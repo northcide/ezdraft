@@ -168,6 +168,8 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .team-item .team-name  { flex: 1; font-size: 13px; }
 .team-item .btn-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0 2px; }
 .team-item .btn-delete:hover { color: var(--danger); }
+.team-item .team-pin-input { width: 80px; font-size: 12px; padding: 3px 7px; }
+.team-item .team-pin-set   { font-size: 11px; padding: 3px 8px; min-width: 36px; }
 
 /* Import result */
 .import-result       { font-size: 12px; margin-top: 7px; color: var(--accent2); font-weight: 600; }
