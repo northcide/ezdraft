@@ -112,9 +112,10 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     </div>
 
     <!-- Font size controls (all roles) -->
-    <div class="font-size-controls">
-      <button id="btn-font-dec" class="btn-font" title="Decrease text size">A&#8722;</button>
-      <button id="btn-font-inc" class="btn-font" title="Increase text size">A+</button>
+    <div class="font-size-controls" title="Adjust player name size">
+      <span class="font-size-a font-size-a--sm">A</span>
+      <input type="range" id="font-size-slider" class="font-size-slider" min="10" max="28" step="1" value="17">
+      <span class="font-size-a font-size-a--lg">A</span>
     </div>
 
     <!-- Admin: draft controls (right) -->

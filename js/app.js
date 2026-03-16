@@ -1542,24 +1542,25 @@ window.addEventListener('resize', () => { fitBoardToScreen(); renderBoard(); });
 
 // ── Board font size controls ───────────────────────────────────────────────────
 (function () {
-  const MIN = 10, MAX = 28, STEP = 1, KEY = 'easydraft_cell_font_size', DEFAULT = 17;
+  const KEY = 'easydraft_cell_font_size', DEFAULT = 17;
+  const slider = document.getElementById('font-size-slider');
+
   function applyFontSize(px) {
     document.documentElement.style.setProperty('--cell-player-size', px + 'px');
+    // Update slider fill gradient to reflect current position
+    const pct = ((px - slider.min) / (slider.max - slider.min)) * 100;
+    slider.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, #d1d5db ${pct}%, #d1d5db 100%)`;
   }
-  const saved = parseInt(localStorage.getItem(KEY), 10);
-  applyFontSize(saved >= MIN && saved <= MAX ? saved : DEFAULT);
 
-  document.getElementById('btn-font-inc').addEventListener('click', () => {
-    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-player-size'), 10) || DEFAULT;
-    const next = Math.min(MAX, cur + STEP);
-    applyFontSize(next);
-    localStorage.setItem(KEY, next);
-  });
-  document.getElementById('btn-font-dec').addEventListener('click', () => {
-    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-player-size'), 10) || DEFAULT;
-    const next = Math.max(MIN, cur - STEP);
-    applyFontSize(next);
-    localStorage.setItem(KEY, next);
+  const saved = parseInt(localStorage.getItem(KEY), 10);
+  const initial = saved >= +slider.min && saved <= +slider.max ? saved : DEFAULT;
+  slider.value = initial;
+  applyFontSize(initial);
+
+  slider.addEventListener('input', () => {
+    const px = +slider.value;
+    applyFontSize(px);
+    localStorage.setItem(KEY, px);
   });
 }());
 

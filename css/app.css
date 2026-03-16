@@ -320,13 +320,29 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   justify-content: center; min-width: 0; overflow: hidden;
 }
 .draft-bar-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
-.font-size-controls { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
-.btn-font {
-  background: none; border: 1px solid #ccc; border-radius: 4px;
-  font-size: 11px; font-weight: 700; color: var(--text2);
-  padding: 2px 6px; cursor: pointer; line-height: 1.4; user-select: none;
+.font-size-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.font-size-a {
+  font-weight: 800; color: var(--text3); line-height: 1; user-select: none;
 }
-.btn-font:hover { background: #e8f0fe; border-color: var(--accent); color: var(--accent); }
+.font-size-a--sm { font-size: 11px; }
+.font-size-a--lg { font-size: 17px; }
+.font-size-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 72px; height: 4px;
+  border-radius: 2px; outline: none; cursor: pointer;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) 50%, #d1d5db 50%, #d1d5db 100%);
+}
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer;
+}
+.font-size-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25); cursor: pointer;
+}
 .draft-bar-name {
   font-size: 14px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .5px; color: var(--text2); white-space: nowrap;
