@@ -552,7 +552,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* Pre-assign player name */
 .board-cell.is-preassigned .cell-player {
   color: #92400e;
-  font-size: 13px;
+  font-size: var(--cell-player-size, 13px);
 }
 
 /* "ON THE CLOCK" label inside the timer cell */
