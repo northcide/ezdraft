@@ -762,7 +762,7 @@ function renderRankings() {
 
 function onPlayerClick(player) {
   if (!state.draft || state.draft.status !== 'active') return;
-  makePick(state.draft.current_pick_num, player.id, player);
+  showPickConfirm(player);
 }
 
 async function makePick(pickNum, playerId, player) {
