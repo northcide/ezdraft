@@ -107,7 +107,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 }
 .timer-countdown.warn   { color: #fde047; }
 .timer-countdown.urgent { color: #f87171; animation: pulse 1s ease-in-out infinite; }
-.timer-total { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: 0; }
+.timer-total { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: 0; margin-left: 6px; }
 
 #timer-bar-wrap {
   width: 100px; height: 6px; background: rgba(255,255,255,.2); border-radius: 3px;
