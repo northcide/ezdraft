@@ -508,7 +508,8 @@ try {
 
         // Determine is_pre_assigned: 1 only for future slots while draft is active/paused
         $currentPickNum = (int)$draft['current_pick_num'];
-        $isFuture       = in_array($draft['status'], ['active','paused'], true) && $pickNum > $currentPickNum;
+        $isFuture       = $draft['status'] === 'setup'
+                          || (in_array($draft['status'], ['active','paused'], true) && $pickNum > $currentPickNum);
         $isCurrentPick  = $draft['status'] === 'active' && $pickNum == $currentPickNum;
         $isPreAssigned  = $isFuture ? 1 : 0;
 
