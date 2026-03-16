@@ -181,22 +181,20 @@ easydraft/
 
 | Path | Owner | Mode | Notes |
 |---|---|---|---|
-| `easydraft/` (root) | `root:www-data` | `755` | Web server reads, no write needed |
-| `api/` | `root:www-data` | `755` | Web server must be able to write `config.php` during setup |
+| `easydraft/` (root) | `www-data:www-data` | `755` | Web server reads, no write needed |
+| `api/` | `www-data:www-data` | `755` | Web server must be able to write `config.php` during setup |
 | `api/config.php` | `www-data:www-data` | `640` | Created by setup; readable by web server only |
-| `api/*.php` (others) | `root:www-data` | `644` | Read-only |
-| `css/`, `js/` | `root:www-data` | `755` / `644` | Read-only |
-| `sql/schema.sql` | `root:www-data` | `644` | Read-only |
+| `api/*.php` (others) | `www-data:www-data` | `644` | Read-only |
+| `css/`, `js/` | `www-data:www-data` | `755` / `644` | Read-only |
+| `sql/schema.sql` | `www-data:www-data` | `644` | Read-only |
 
 Quick setup:
 ```bash
-chown -R root:www-data /var/www/html/easydraft
+chown -R www-data:www-data /var/www/html/easydraft
 find /var/www/html/easydraft -type d -exec chmod 755 {} \;
 find /var/www/html/easydraft -type f -exec chmod 644 {} \;
-chmod 775 /var/www/html/easydraft/api   # allow web server to write config.php
 ```
-After setup completes, lock the `api/` directory back down:
+After setup completes, lock down `config.php`:
 ```bash
-chmod 755 /var/www/html/easydraft/api
 chmod 640 /var/www/html/easydraft/api/config.php
 ```
