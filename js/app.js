@@ -798,8 +798,13 @@ function renderMobileBoard() {
     container.appendChild(card);
   }
 
+  const savedPlayerScroll = wrap.querySelector('.mobile-player-scroll')?.scrollTop ?? 0;
   wrap.innerHTML = '';
   wrap.appendChild(container);
+  if (savedPlayerScroll > 0) {
+    const el = wrap.querySelector('.mobile-player-scroll');
+    if (el) el.scrollTop = savedPlayerScroll;
+  }
 }
 
 function isMobileCoach() {
