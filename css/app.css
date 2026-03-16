@@ -323,7 +323,9 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .font-size-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .font-size-a {
   font-weight: 800; color: var(--text3); line-height: 1; user-select: none;
+  cursor: pointer; transition: color .15s;
 }
+.font-size-a:hover { color: var(--accent); }
 .font-size-a--sm { font-size: 11px; }
 .font-size-a--lg { font-size: 17px; }
 .font-size-slider {

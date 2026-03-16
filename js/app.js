@@ -1562,6 +1562,16 @@ window.addEventListener('resize', () => { fitBoardToScreen(); renderBoard(); });
     applyFontSize(px);
     localStorage.setItem(KEY, px);
   });
+
+  function nudge(delta) {
+    const next = Math.min(+slider.max, Math.max(+slider.min, +slider.value + delta));
+    slider.value = next;
+    applyFontSize(next);
+    localStorage.setItem(KEY, next);
+  }
+
+  document.querySelector('.font-size-a--sm').addEventListener('click', () => nudge(-1));
+  document.querySelector('.font-size-a--lg').addEventListener('click', () => nudge(+1));
 }());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
