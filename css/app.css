@@ -513,6 +513,12 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   letter-spacing: .1px;
 }
 
+/* First / middle name spans smaller so last name reads as the headline */
+.cell-player span:not(:last-child) {
+  font-size: .72em;
+  font-weight: 700;
+}
+
 /* Clear pick button — top-right corner, admin only */
 .cell-clear-btn {
   position: absolute;
