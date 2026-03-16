@@ -56,7 +56,7 @@ function applyRole() {
   document.querySelectorAll('.admin-only').forEach(el => {
     el.classList.toggle('hidden', !isAdmin);
   });
-  document.getElementById('rankings-panel').classList.toggle('hidden', !isAdmin);
+  document.getElementById('rankings-panel').classList.toggle('hidden', isMobileCoach());
   document.getElementById('topbar-role').textContent =
     isAdmin ? '(Admin)' : '(Coach \u2014 view only)';
 }
@@ -597,7 +597,7 @@ function renderRankings() {
     card.className = 'player-card' + (drafted ? ' is-drafted' : '');
     card.dataset.playerId = p.id;
     card.innerHTML = `<span class="player-rank">#${p.rank}</span><span class="player-name">${esc(p.name)}</span>`;
-    if (!drafted) {
+    if (!drafted && state.role === 'admin') {
       card.draggable = true;
       card.addEventListener('dragstart', onPlayerDragStart);
       card.addEventListener('dragend',   onPlayerDragEnd);

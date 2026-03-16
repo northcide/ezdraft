@@ -211,7 +211,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
         <div class="rankings-header">
           <div class="rankings-header-row">
             <input type="text" id="filter-search" class="search-input" placeholder="Search players&#8230;" autocomplete="off">
-            <button id="btn-toggle-reorder" class="btn btn-sm btn-secondary" title="Reorder players">&#8693; Reorder</button>
+            <button id="btn-toggle-reorder" class="btn btn-sm btn-secondary admin-only" title="Reorder players">&#8693; Reorder</button>
           </div>
           <label class="filter-check">
             <input type="checkbox" id="filter-available" checked> Available only
