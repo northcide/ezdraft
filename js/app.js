@@ -1361,7 +1361,8 @@ function updateStatusBadge() {
   const badge  = document.getElementById('draft-status-badge');
   const status = state.draft?.status || 'none';
   badge.className   = 'badge badge-' + (status === 'none' ? 'setup' : status);
-  badge.textContent = status === 'none' ? 'No Draft' : status.charAt(0).toUpperCase() + status.slice(1);
+  const labels = { none: 'No Draft', setup: 'Not Started' };
+  badge.textContent = labels[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
 }
 
 function updateCurrentPickLabel() {
