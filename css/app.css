@@ -450,10 +450,10 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   50%       { background: #ff00cc; box-shadow: 0 0 0 6px rgba(255,0,204,.15), 0 2px 20px rgba(255,0,204,.5); }
 }
 
-/* Filled (picked) slot — bold navy */
+/* Filled (picked) slot — light green */
 .board-cell.is-filled {
-  background: var(--cell-picked-bg);
-  border: 2px solid #162d4a;
+  background: #bbf7d0;
+  border: 2px solid #86efac;
 }
 
 /* Pre-assigned */
@@ -493,6 +493,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   color: rgba(255,255,255,.45);
   letter-spacing: .3px;
 }
+.board-cell.is-filled      .cell-pick-num { color: rgba(20,83,45,.5); }
 .board-cell.is-pick-slot   .cell-pick-num { color: rgba(0,0,0,.3); }
 .board-cell.is-current     .cell-pick-num { color: rgba(255,255,255,.6); }
 .board-cell.is-preassigned .cell-pick-num { color: rgba(0,0,0,.3); }
@@ -537,6 +538,14 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 }
 .board-cell:hover .cell-clear-btn { display: flex; }
 .cell-clear-btn:hover { background: var(--danger); color: #fff; }
+
+/* Filled cell — dark green text to contrast light green background */
+.board-cell.is-filled .cell-player { color: #14532d; }
+.board-cell.is-filled .cell-auto   { color: rgba(20,83,45,.45); }
+.board-cell.is-filled .cell-clear-btn {
+  color: rgba(0,0,0,.35);
+  background: rgba(0,0,0,.06);
+}
 
 /* Pre-assigned clear button is darker */
 .board-cell.is-preassigned .cell-clear-btn {
