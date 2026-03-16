@@ -1150,20 +1150,30 @@ function onCellDragOver(e) {
   e.currentTarget.classList.add('drop-target');
 }
 function onCellDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
-async function onCellDrop(e, pick) {
+function onCellDrop(e, pick) {
   e.preventDefault(); e.currentTarget.classList.remove('drop-target');
   if (!state.dragPlayerId || !state.draft) return;
-  const playerId   = state.dragPlayerId;
+  const playerId = state.dragPlayerId;
   state.dragPlayerId = null;
-  const player     = state.players.find(p => Number(p.id) === playerId);
+  const player   = state.players.find(p => Number(p.id) === playerId);
   const playerName = player?.name || `Player #${playerId}`;
-  const slotDesc   = pick.team_name ? `${pick.team_name} (pick #${pick.pick_num})` : `pick #${pick.pick_num}`;
-  const existing   = pick.player_id ? ` Replaces: ${pick.player_name}.` : '';
-  if (!confirm(`Assign ${playerName} to ${slotDesc}?${existing}`)) return;
-  try {
-    await api(API.drafts, 'force_assign', { pick_num: pick.pick_num, player_id: playerId });
-    await fetchState();
-  } catch (err) { alert('Error: ' + err.message); }
+  const slotDesc   = pick.team_name ? `${esc(pick.team_name)} (pick #${pick.pick_num})` : `pick #${pick.pick_num}`;
+  const existing   = pick.player_id ? ` Replaces: ${esc(pick.player_name)}.` : '';
+
+  document.getElementById('pick-confirm-text').textContent =
+    `Assign "${playerName}" to ${slotDesc}?${existing}`;
+  document.getElementById('pick-confirm-modal').classList.remove('hidden');
+
+  const confirmBtn = document.getElementById('btn-pick-confirm');
+  const handler = async () => {
+    confirmBtn.removeEventListener('click', handler);
+    document.getElementById('pick-confirm-modal').classList.add('hidden');
+    try {
+      await api(API.drafts, 'force_assign', { pick_num: pick.pick_num, player_id: playerId });
+      await fetchState();
+    } catch (err) { alert('Error: ' + err.message); }
+  };
+  confirmBtn.addEventListener('click', handler);
 }
 
 // ── Player Reorder ────────────────────────────────────────────────────────────
