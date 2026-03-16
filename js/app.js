@@ -236,6 +236,19 @@ function applyState(data) {
   updateStatusBadge();
   updateCurrentPickLabel();
 
+  // Total draft time label (admin only)
+  const totalEl = document.getElementById('timer-total');
+  if (totalEl) {
+    if (state.role === 'admin' && state.picks?.length && state.draft?.timer_minutes) {
+      const totalMins = state.picks.length * state.draft.timer_minutes;
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      totalEl.textContent = h > 0 ? ` (${h}h ${m}m)` : ` (${m}m)`;
+    } else {
+      totalEl.textContent = '';
+    }
+  }
+
   // Timer
   if (state.draft?.status === 'active') {
     if (!state.timerInterval) startTimer();
@@ -504,13 +517,6 @@ function updateTimerDisplay(seconds) {
       countdown.className = 'timer-countdown';
       if (seconds <= 30) countdown.classList.add('warn');
       if (seconds <= 10) { countdown.classList.remove('warn'); countdown.classList.add('urgent'); }
-      const totalEl = document.getElementById('timer-total');
-      if (totalEl) {
-        const totalMins = (state.picks?.length || 0) * (state.draft?.timer_minutes || 0);
-        const h = Math.floor(totalMins / 60);
-        const m = totalMins % 60;
-        totalEl.textContent = h > 0 ? ` (${h}h ${m}m)` : ` (${m}m)`;
-      }
     } else {
       display.classList.add('hidden');
     }
