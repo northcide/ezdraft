@@ -17,8 +17,16 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     <div class="login-logo">EasyDraft</div>
     <div id="login-error" class="login-error hidden"></div>
     <form id="login-form" autocomplete="off">
+      <div id="login-type-toggle" class="login-type-toggle">
+        <button type="button" class="login-type-btn active" data-mode="admin">Admin / Coach</button>
+        <button type="button" class="login-type-btn" data-mode="team">Team</button>
+      </div>
       <label class="login-label">League / Draft Name</label>
       <input id="login-league" type="text" class="login-input" placeholder="Enter league or draft name" autocomplete="off">
+      <div id="login-team-row" class="hidden">
+        <label class="login-label">Team Name</label>
+        <input id="login-team" type="text" class="login-input" placeholder="Enter team name" autocomplete="off">
+      </div>
       <label class="login-label">PIN</label>
       <input id="login-pin" type="password" class="login-input" placeholder="Enter PIN" autocomplete="new-password">
       <button type="submit" class="login-btn">Sign In</button>
@@ -34,6 +42,17 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     <div class="announcement-selects">selects</div>
     <div class="announcement-player" id="ann-player-name"></div>
     <div class="announcement-position" id="ann-player-pos"></div>
+  </div>
+</div>
+
+<!-- Pick Confirmation Modal -->
+<div id="pick-confirm-modal" class="pick-confirm-overlay hidden">
+  <div class="pick-confirm-box">
+    <p id="pick-confirm-text" class="pick-confirm-msg"></p>
+    <div class="pick-confirm-actions">
+      <button id="btn-pick-confirm" class="btn btn-success">Confirm Pick</button>
+      <button id="btn-pick-cancel"  class="btn btn-secondary">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -132,14 +151,24 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
           </div>
         </div>
         <div class="tab-divider"></div>
-        <div class="tab-field-row">
-          <div class="tab-field-group">
-            <label class="tab-label">Coach Access Name</label>
-            <input type="text" id="setting-coach-name" class="input-sm" style="width:200px" placeholder="e.g. Majors Coaches">
-          </div>
-          <div class="tab-field-group">
-            <label class="tab-label">Coach PIN</label>
-            <input type="text" id="setting-coach-pin" class="input-sm" style="width:160px" placeholder="e.g. majors2026">
+        <div class="admin-row" id="coach-mode-row">
+          <label class="label-check">
+            <input type="radio" name="coach_mode" value="shared" checked> Shared Coach Login
+          </label>
+          <label class="label-check">
+            <input type="radio" name="coach_mode" value="team"> Team Login
+          </label>
+        </div>
+        <div id="shared-coach-fields">
+          <div class="tab-field-row" style="margin-top:10px">
+            <div class="tab-field-group">
+              <label class="tab-label">Coach Access Name</label>
+              <input type="text" id="setting-coach-name" class="input-sm" style="width:200px" placeholder="e.g. Majors Coaches">
+            </div>
+            <div class="tab-field-group">
+              <label class="tab-label">Coach PIN</label>
+              <input type="text" id="setting-coach-pin" class="input-sm" style="width:160px" placeholder="e.g. majors2026">
+            </div>
           </div>
         </div>
         <div class="admin-row" style="margin-top:14px">
@@ -150,9 +179,20 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
       <!-- Teams Tab -->
       <div id="admin-tab-teams" class="admin-tab-panel hidden">
         <div id="team-list" class="team-list" style="max-height:220px"></div>
-        <div class="admin-row" style="margin-top:10px">
-          <input type="text" id="new-team-name" placeholder="Team name" class="input-sm">
-          <button id="btn-add-team" class="btn btn-sm btn-primary">+ Add Team</button>
+        <div id="bulk-team-create" class="admin-only" style="margin-top:12px">
+          <div class="admin-row">
+            <label class="tab-label" style="margin:0">How many teams?</label>
+            <select id="team-count-select" class="input-sm">
+              <option value="">-- select --</option>
+            </select>
+          </div>
+          <div id="bulk-team-rows" style="margin-top:8px"></div>
+          <div id="bulk-team-footer" class="hidden" style="margin-top:8px">
+            <label class="label-check">
+              <input type="checkbox" id="bulk-clear-existing"> Clear Existing Teams
+            </label>
+            <button id="btn-save-all-teams" class="btn btn-sm btn-primary">Save All Teams</button>
+          </div>
         </div>
       </div>
 

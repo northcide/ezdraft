@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   completed_at            DATETIME DEFAULT NULL,
   coach_name              VARCHAR(255) DEFAULT NULL,
   coach_pin               VARCHAR(255) DEFAULT NULL,
+  coach_mode              ENUM('shared','team') NOT NULL DEFAULT 'shared',
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS teams (
   draft_id     INT NOT NULL,
   name         VARCHAR(255) NOT NULL,
   draft_order  INT NOT NULL,
+  pin          VARCHAR(255) NULL,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_draft_order (draft_id, draft_order),
   FOREIGN KEY (draft_id) REFERENCES drafts(id) ON DELETE CASCADE

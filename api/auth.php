@@ -17,12 +17,40 @@ try {
         jsonResponse($result);
 
     } elseif ($action === 'login') {
-        $data   = getInput();
-        $league = trim($data['league_name'] ?? '');
-        $pin    = trim($data['pin'] ?? '');
-        if ($league === '' || $pin === '') jsonError('League name and PIN are required');
+        $data     = getInput();
+        $league   = trim($data['league_name'] ?? '');
+        $pin      = trim($data['pin'] ?? '');
+        $teamName = trim($data['team_name'] ?? '');
 
-        $db  = getDB();
+        if ($league === '') jsonError('League name is required');
+
+        $db = getDB();
+
+        // Team login path (when team_name is present)
+        if ($teamName !== '') {
+            $draftStmt = $db->prepare(
+                "SELECT id FROM drafts WHERE name = ? AND coach_mode = 'team'"
+            );
+            $draftStmt->execute([$league]);
+            $d = $draftStmt->fetch();
+            if (!$d) jsonError('Invalid draft name or not in team mode', 401);
+
+            $teamStmt = $db->prepare(
+                "SELECT id, name FROM teams WHERE draft_id = ? AND name = ? AND pin = ?"
+            );
+            $teamStmt->execute([$d['id'], $teamName, $pin]);
+            $t = $teamStmt->fetch();
+            if (!$t) jsonError('Invalid team name or PIN', 401);
+
+            $_SESSION['role']                 = 'team';
+            $_SESSION['team_id']              = $t['id'];
+            $_SESSION['accessible_draft_ids'] = [$d['id']];
+            $_SESSION['selected_draft_id']    = $d['id'];
+            jsonResponse(['role' => 'team', 'league_name' => $league]);
+        }
+
+        if ($pin === '') jsonError('PIN is required');
+
         $row = $db->query(
             "SELECT `key`, value FROM settings WHERE `key` IN ('league_name','admin_pin')"
         )->fetchAll(PDO::FETCH_KEY_PAIR);

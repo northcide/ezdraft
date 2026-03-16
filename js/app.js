@@ -15,6 +15,7 @@ const state = {
   teams:            [],
   players:          [],
   role:             '',
+  teamId:           null,
   leagueName:       '',
   allDrafts:        [],
   accessibleDrafts: [],
@@ -31,6 +32,7 @@ const state = {
   mobileAvailableOnly:      true,
   mobileExpandedRounds:     new Set(),
   mobileCurrentRound:       0,
+  lastManualPickNum:        null,
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -55,24 +57,40 @@ function showLogin() {
 
 function applyRole() {
   const isAdmin = state.role === 'admin';
+  const isTeam  = state.role === 'team';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.classList.toggle('hidden', !isAdmin);
   });
-  document.getElementById('rankings-panel').classList.toggle('hidden', isMobileCoach());
+  document.getElementById('rankings-panel')
+    .classList.toggle('hidden', isMobileNonAdmin());
   document.getElementById('topbar-role').textContent =
-    isAdmin ? '(Admin)' : '(Coach \u2014 view only)';
+    isAdmin ? '(Admin)' : isTeam ? '(Team)' : '(Coach \u2014 view only)';
 }
+
+// Login type toggle
+document.querySelectorAll('.login-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.login-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('login-team-row')
+      .classList.toggle('hidden', btn.dataset.mode !== 'team');
+  });
+});
 
 document.getElementById('login-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const league = document.getElementById('login-league').value.trim();
-  const pin    = document.getElementById('login-pin').value.trim();
-  const errEl  = document.getElementById('login-error');
+  const league    = document.getElementById('login-league').value.trim();
+  const pin       = document.getElementById('login-pin').value.trim();
+  const isTeamMode = document.querySelector('.login-type-btn.active')?.dataset.mode === 'team';
+  const errEl     = document.getElementById('login-error');
   errEl.classList.add('hidden');
+  const payload = { league_name: league, pin };
+  if (isTeamMode) payload.team_name = document.getElementById('login-team').value.trim();
   try {
-    const data = await api(API.auth, 'login', { league_name: league, pin });
+    const data = await api(API.auth, 'login', payload);
     state.role             = data.role;
     state.leagueName       = data.league_name;
+    state.teamId           = data.team_id ?? null;
     state.accessibleDrafts = data.accessibleDrafts || [];
     applyRole();
     document.getElementById('login-overlay').classList.add('hidden');
@@ -158,15 +176,27 @@ document.addEventListener('visibilitychange', () => {
 function applyState(data) {
   const prevStatus = state.draft?.status;
 
-  // Detect newly filled picks for coaches — they don't trigger makePick themselves
-  if (state.role === 'coach') {
+  // Detect newly filled picks via polling — runs for all roles
+  {
     const isInitialLoad  = state.draft === null;
     const isDraftSwitch  = state.draft?.id !== data.draft?.id;
     const oldFilled = new Set((state.picks || []).filter(p => p.player_id).map(p => p.pick_num));
-    const newlyFilled = (data.picks || []).filter(p => p.player_id && !oldFilled.has(p.pick_num));
+    const newlyFilled = (data.picks || []).filter(p => {
+      if (!p.player_id || oldFilled.has(p.pick_num)) return false;
+      // Skip admin's own manual pick — makePick already showed the announcement
+      if (state.role === 'admin' && p.pick_num == state.lastManualPickNum) return false;
+      // Skip team's own manual pick — makePick already showed the announcement
+      // Do NOT skip auto-picks — the server picked for us, modal may still be open
+      if (state.role === 'team' && p.team_id == state.teamId && !p.is_auto_pick) return false;
+      return true;
+    });
     if (!isInitialLoad && !isDraftSwitch && data.draft?.status === 'active' && newlyFilled.length > 0) {
       const pick = newlyFilled[newlyFilled.length - 1];
-      showAnnouncement(pick, { name: pick.player_name, position: pick.player_position || '' });
+      // If the server auto-picked for this team while the confirm modal was open, close it
+      if (state.role === 'team' && pick.team_id == state.teamId && pick.is_auto_pick) {
+        document.getElementById('pick-confirm-modal').classList.add('hidden');
+      }
+      showAnnouncement(pick, { name: pick.player_name, position: pick.player_position || '' }, !!pick.is_auto_pick);
     }
   }
 
@@ -175,6 +205,7 @@ function applyState(data) {
   state.teams           = data.teams   || [];
   state.players         = data.players || [];
   if (data.role)             state.role            = data.role;
+  if (data.team_id !== undefined) state.teamId     = data.team_id;
   if (data.allDrafts)        state.allDrafts        = data.allDrafts;
   if (data.accessibleDrafts) state.accessibleDrafts = data.accessibleDrafts;
   if (data.selectedDraftId !== undefined) state.selectedDraftId = data.selectedDraftId;
@@ -208,12 +239,13 @@ function applyState(data) {
     updateTimerDisplay(null);
   }
 
-  // Polling: coaches need updates in every state (setup→active transition,
+  // Polling: coaches/teams need updates in every state (setup→active transition,
   // paused boards, completed results). Admins only need it when active/paused.
   const wantsPoll = !!state.draft && (
     state.draft.status === 'active' ||
     state.draft.status === 'paused' ||
-    state.role === 'coach'
+    state.role === 'coach' ||
+    state.role === 'team'
   );
   if (wantsPoll) {
     if (!state.pollInterval) startPolling();
@@ -329,6 +361,12 @@ function fillSettingsForm() {
   const coachPinEl  = document.getElementById('setting-coach-pin');
 
   if (!nameEl) return;
+  const mode = d?.coach_mode ?? 'shared';
+  const modeRadio = document.querySelector(`input[name="coach_mode"][value="${mode}"]`);
+  if (modeRadio) modeRadio.checked = true;
+  const sharedFields = document.getElementById('shared-coach-fields');
+  if (sharedFields) sharedFields.style.display = mode === 'team' ? 'none' : '';
+
   if (d) {
     nameEl.value      = d.name          || '';
     timerEl.value     = d.timer_minutes || 2;
@@ -384,6 +422,14 @@ document.getElementById('btn-delete-draft').addEventListener('click', async () =
 });
 
 // ── Save Settings ─────────────────────────────────────────────────────────────
+// Coach mode radio change handler
+document.querySelectorAll('input[name="coach_mode"]').forEach(r =>
+  r.addEventListener('change', () => {
+    const sharedFields = document.getElementById('shared-coach-fields');
+    if (sharedFields) sharedFields.style.display = r.value === 'team' ? 'none' : '';
+  })
+);
+
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
   if (!state.draft) return;
   const payload = {
@@ -392,6 +438,7 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     auto_pick_enabled: document.getElementById('setting-autopick').checked ? 1 : 0,
     coach_name:        document.getElementById('setting-coach-name').value.trim(),
     coach_pin:         document.getElementById('setting-coach-pin').value.trim(),
+    coach_mode:        document.querySelector('input[name="coach_mode"]:checked')?.value ?? 'shared',
   };
   try {
     const data = await api(API.drafts, 'update_settings', payload);
@@ -582,32 +629,102 @@ document.getElementById('announcement').addEventListener('click', () => {
 });
 
 // ── Rankings ──────────────────────────────────────────────────────────────────
+function currentPickTeamId() {
+  const pick = state.picks?.find(p => p.pick_num === state.draft?.current_pick_num);
+  return pick?.team_id ?? null;
+}
+
+function showPickConfirm(player) {
+  const teamName = state.teams?.find(t => t.id == state.teamId)?.name ?? 'your team';
+  document.getElementById('pick-confirm-text').textContent =
+    `Draft "${esc(player.name)}" for ${esc(teamName)}?`;
+  document.getElementById('pick-confirm-modal').classList.remove('hidden');
+
+  const confirmBtn = document.getElementById('btn-pick-confirm');
+  const handler = async () => {
+    confirmBtn.removeEventListener('click', handler);
+    document.getElementById('pick-confirm-modal').classList.add('hidden');
+    await makePick(state.draft.current_pick_num, player.id, player);
+  };
+  confirmBtn.addEventListener('click', handler);
+}
+
+document.getElementById('btn-pick-cancel').addEventListener('click', () => {
+  document.getElementById('pick-confirm-modal').classList.add('hidden');
+});
+
 function renderRankings() {
   const list        = document.getElementById('rankings-list');
   const search      = document.getElementById('filter-search').value.trim().toLowerCase();
   const filterAvail = document.getElementById('filter-available').checked;
   const draftedIds  = new Set(state.picks.filter(p => p.player_id).map(p => Number(p.player_id)));
 
+  // Map player_id → pick info (team_id, team_name) for drafted players
+  const draftedByTeam = {};
+  state.picks.filter(p => p.player_id).forEach(p => {
+    draftedByTeam[Number(p.player_id)] = { teamId: p.team_id, teamName: p.team_name };
+  });
+
   let players = state.players;
-  if (filterAvail) players = players.filter(p => !draftedIds.has(Number(p.id)));
-  if (search)      players = players.filter(p => p.name.toLowerCase().includes(search));
+  if (filterAvail) {
+    if (state.role === 'coach' || state.role === 'team') {
+      // Keep available players + own team's picks (so coaches/teams can see their roster)
+      players = players.filter(p => {
+        if (!draftedIds.has(Number(p.id))) return true;
+        return draftedByTeam[Number(p.id)]?.teamId == state.teamId;
+      });
+    } else {
+      players = players.filter(p => !draftedIds.has(Number(p.id)));
+    }
+  }
+  if (search) players = players.filter(p => p.name.toLowerCase().includes(search));
 
   if (players.length === 0) {
     list.innerHTML = '<div class="empty-state">No players match.</div>';
     return;
   }
   list.innerHTML = '';
+  const isMyTurnNow = state.role === 'team'
+    && state.draft?.status === 'active'
+    && currentPickTeamId() == state.teamId;  // loose equality (int vs string)
+
   players.forEach(p => {
-    const drafted = draftedIds.has(Number(p.id));
-    const card    = document.createElement('div');
-    card.className = 'player-card' + (drafted ? ' is-drafted' : '');
+    const drafted   = draftedIds.has(Number(p.id));
+    const pickInfo  = draftedByTeam[Number(p.id)];
+    const isMyPick  = drafted && pickInfo?.teamId == state.teamId
+                      && (state.role === 'coach' || state.role === 'team');
+
+    const card = document.createElement('div');
     card.dataset.playerId = p.id;
+
+    if (drafted && isMyPick) {
+      card.className = 'player-card is-my-pick';
+    } else if (drafted) {
+      card.className = 'player-card is-drafted';
+    } else {
+      card.className = 'player-card';
+    }
+
     card.innerHTML = `<span class="player-rank">#${p.rank}</span><span class="player-name">${esc(p.name)}</span>`;
+
+    if (drafted && pickInfo) {
+      const badge = document.createElement('span');
+      badge.className = 'player-team-badge' + (isMyPick ? ' is-my-team' : '');
+      badge.textContent = isMyPick ? '✓' : esc(pickInfo.teamName);
+      card.appendChild(badge);
+    }
+
     if (!drafted && state.role === 'admin') {
       card.draggable = true;
       card.addEventListener('dragstart', onPlayerDragStart);
       card.addEventListener('dragend',   onPlayerDragEnd);
       card.addEventListener('click',     () => onPlayerClick(p));
+    } else if (!drafted && isMyTurnNow) {
+      const pill = document.createElement('button');
+      pill.className = 'btn-pick-pill';
+      pill.textContent = 'PICK';
+      pill.addEventListener('click', e => { e.stopPropagation(); showPickConfirm(p); });
+      card.appendChild(pill);
     }
     list.appendChild(card);
   });
@@ -622,8 +739,10 @@ async function makePick(pickNum, playerId, player) {
   try {
     await api(API.drafts, 'pick', { pick_num: pickNum, player_id: playerId });
     const pick = state.picks.find(p => p.pick_num == pickNum) || { pick_num: pickNum, team_name: '' };
+    state.lastManualPickNum = pickNum;
     showAnnouncement(pick, player);
     await fetchState();
+    state.lastManualPickNum = null;
   } catch (e) { alert('Pick error: ' + e.message); }
 }
 
@@ -687,8 +806,16 @@ function renderMobileBoard() {
     panelHeader.className = 'mobile-player-panel-header';
 
     const availId = 'mobile-avail-' + Date.now();
+    let pickCounterHtml = '';
+    if (state.teamId) {
+      const teamPicks = state.picks.filter(pk => pk.team_id == state.teamId);
+      const pickedCount = teamPicks.filter(pk => pk.player_id).length;
+      const totalCount  = teamPicks.length;
+      pickCounterHtml = `<span class="mobile-pick-counter">${pickedCount}/${totalCount}</span>`;
+    }
     panelHeader.innerHTML =
       `<span class="mobile-player-panel-title">Players</span>` +
+      pickCounterHtml +
       `<label class="mobile-avail-label" for="${availId}">` +
         `<input type="checkbox" id="${availId}" ${state.mobileAvailableOnly ? 'checked' : ''}>` +
         ` Available only` +
@@ -702,8 +829,23 @@ function renderMobileBoard() {
     const scroll = document.createElement('div');
     scroll.className = 'mobile-player-scroll';
 
+    // Map player_id → pick info for drafted players
+    const draftedByTeamM = {};
+    state.picks.filter(pk => pk.player_id).forEach(pk => {
+      draftedByTeamM[Number(pk.player_id)] = { teamId: pk.team_id, teamName: pk.team_name };
+    });
+
     let players = [...state.players].sort((a, b) => a.rank - b.rank);
-    if (state.mobileAvailableOnly) players = players.filter(p => !draftedIds.has(Number(p.id)));
+    if (state.mobileAvailableOnly) {
+      if (state.role === 'coach' || state.role === 'team') {
+        // Always show own team's picks so the roster is visible
+        players = players.filter(p =>
+          !draftedIds.has(Number(p.id)) || draftedByTeamM[Number(p.id)]?.teamId == state.teamId
+        );
+      } else {
+        players = players.filter(p => !draftedIds.has(Number(p.id)));
+      }
+    }
 
     if (players.length === 0) {
       const empty = document.createElement('div');
@@ -711,13 +853,36 @@ function renderMobileBoard() {
       empty.textContent = state.mobileAvailableOnly ? 'No available players.' : 'No players loaded.';
       scroll.appendChild(empty);
     } else {
+      const isMyTurnMobile = state.role === 'team'
+        && isActive
+        && currentPickTeamId() == state.teamId;
       players.forEach(p => {
+        const isDrafted = draftedIds.has(Number(p.id));
+        const pickInfo  = draftedByTeamM[Number(p.id)];
+        const isMyPick  = isDrafted && pickInfo?.teamId == state.teamId
+                          && (state.role === 'coach' || state.role === 'team');
+
         const row = document.createElement('div');
-        row.className = 'mobile-player-row' + (draftedIds.has(Number(p.id)) ? ' is-drafted' : '');
+        row.className = 'mobile-player-row' + (isDrafted && !isMyPick ? ' is-drafted' : '')
+                                             + (isMyPick ? ' is-my-pick' : '');
         row.innerHTML =
           `<span class="mobile-player-rank">#${p.rank}</span>` +
-          `<span class="mobile-player-name">${esc(p.name)}</span>` +
-          (draftedIds.has(Number(p.id)) ? `<span class="mobile-player-drafted">drafted</span>` : '');
+          `<span class="mobile-player-name">${esc(p.name)}</span>`;
+
+        if (isDrafted && pickInfo) {
+          const badge = document.createElement('span');
+          badge.className = 'player-team-badge' + (isMyPick ? ' is-my-team' : '');
+          badge.textContent = isMyPick ? '✓' : esc(pickInfo.teamName);
+          row.appendChild(badge);
+        }
+
+        if (!isDrafted && isMyTurnMobile) {
+          const pill = document.createElement('button');
+          pill.className = 'btn-pick-pill';
+          pill.textContent = 'PICK';
+          pill.addEventListener('click', e => { e.stopPropagation(); showPickConfirm(p); });
+          row.appendChild(pill);
+        }
         scroll.appendChild(row);
       });
     }
@@ -811,10 +976,14 @@ function isMobileCoach() {
   return state.role === 'coach' && window.innerWidth < 768;
 }
 
+function isMobileNonAdmin() {
+  return (state.role === 'coach' || state.role === 'team') && window.innerWidth < 768;
+}
+
 // ── Board ─────────────────────────────────────────────────────────────────────
 function renderBoard() {
-  document.getElementById('rankings-panel').classList.toggle('hidden', isMobileCoach());
-  if (isMobileCoach()) { renderMobileBoard(); return; }
+  document.getElementById('rankings-panel').classList.toggle('hidden', isMobileNonAdmin());
+  if (isMobileNonAdmin()) { renderMobileBoard(); return; }
   const wrap = document.getElementById('board-wrap');
   const banner = document.getElementById('draft-complete-banner');
   if (banner) banner.classList.toggle('hidden', state.draft?.status !== 'completed');
@@ -1025,18 +1194,6 @@ function renderTeamList() {
   });
 }
 
-async function addTeam() {
-  const input = document.getElementById('new-team-name');
-  const name  = input.value.trim();
-  if (!name) return;
-  try {
-    await api(API.teams, 'create', { name });
-    input.value = '';
-    await fetchState();
-    setTeamsNeedSetup(true);
-  } catch (e) { alert('Error: ' + e.message); }
-}
-
 async function deleteTeam(id) {
   try {
     await api(API.teams, 'delete', { id });
@@ -1044,6 +1201,49 @@ async function deleteTeam(id) {
     setTeamsNeedSetup(true);
   } catch (e) { alert('Error: ' + e.message); }
 }
+
+// ── Bulk Team Creation ─────────────────────────────────────────────────────────
+(function initBulkTeams() {
+  const sel = document.getElementById('team-count-select');
+  for (let i = 2; i <= 16; i++) {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = i;
+    sel.appendChild(o);
+  }
+
+  sel.addEventListener('change', function() {
+    const n = parseInt(this.value) || 0;
+    const container = document.getElementById('bulk-team-rows');
+    container.innerHTML = '';
+    document.getElementById('bulk-team-footer').classList.toggle('hidden', !n);
+    for (let i = 0; i < n; i++) {
+      const row = document.createElement('div');
+      row.className = 'bulk-team-row';
+      row.innerHTML =
+        `<input type="text" class="bulk-team-name input-sm" placeholder="Team ${i + 1} Name">` +
+        `<input type="text" class="bulk-team-pin  input-sm" placeholder="PIN (optional)">`;
+      container.appendChild(row);
+    }
+  });
+
+  document.getElementById('btn-save-all-teams').addEventListener('click', async () => {
+    const teams = [...document.querySelectorAll('.bulk-team-row')].map(r => ({
+      name: r.querySelector('.bulk-team-name').value.trim(),
+      pin:  r.querySelector('.bulk-team-pin').value.trim(),
+    }));
+    if (teams.some(t => !t.name)) { alert('All team names are required.'); return; }
+    const clearExisting = document.getElementById('bulk-clear-existing').checked;
+    try {
+      await api(API.teams, 'bulk_create', { teams, clear_existing: clearExisting });
+      document.getElementById('team-count-select').value = '';
+      document.getElementById('bulk-team-rows').innerHTML = '';
+      document.getElementById('bulk-team-footer').classList.add('hidden');
+      document.getElementById('bulk-clear-existing').checked = false;
+      await fetchState();
+      setTeamsNeedSetup(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  });
+})();
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 function updateControls() {
@@ -1100,8 +1300,7 @@ document.getElementById('btn-close-reorder').addEventListener('click', () => {
   document.getElementById('rankings-view').classList.remove('hidden');
 });
 
-document.getElementById('btn-add-team').addEventListener('click', addTeam);
-document.getElementById('new-team-name').addEventListener('keydown', e => { if (e.key === 'Enter') addTeam(); });
+// (add-team button removed; teams are now created in bulk)
 
 document.getElementById('btn-start').addEventListener('click', async () => {
   try {

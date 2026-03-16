@@ -139,7 +139,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <input name="league_name" value="<?= htmlspecialchars($_POST['league_name'] ?? 'My League') ?>" placeholder="Springfield Little League">
     <label>Admin PIN <small style="font-weight:400;text-transform:none">(full control)</small></label>
     <input type="password" name="admin_pin" placeholder="Choose a secure PIN">
-    <p style="margin-top:10px;font-size:12px;color:#666">Coach PINs are set per-draft inside the app after setup.</p>
+    <p style="margin-top:10px;font-size:12px;color:#666">Coach and team PINs are set per-draft inside the app after setup.</p>
 
     <button type="submit">Run Setup</button>
   </form>

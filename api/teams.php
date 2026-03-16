@@ -11,18 +11,23 @@ try {
         $draftId = contextDraftId($db);
         $stmt    = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
         $stmt->execute([$draftId]);
-        jsonResponse($stmt->fetchAll());
+        $rows = $stmt->fetchAll();
+        if (currentRole() !== 'admin') {
+            $rows = array_map(fn($r) => array_diff_key($r, ['pin' => 1]), $rows);
+        }
+        jsonResponse($rows);
 
     } elseif ($action === 'create') {
         requireAdmin();
         $draftId  = contextDraftId($db);
         $data     = getInput();
         if (empty($data['name'])) jsonError('name is required');
+        $pin      = trim($data['pin'] ?? '') ?: null;
         $maxStmt  = $db->prepare('SELECT COALESCE(MAX(draft_order),0) FROM teams WHERE draft_id=?');
         $maxStmt->execute([$draftId]);
         $maxOrder = (int)$maxStmt->fetchColumn();
-        $stmt     = $db->prepare('INSERT INTO teams (draft_id, name, draft_order) VALUES (?, ?, ?)');
-        $stmt->execute([$draftId, $data['name'], $maxOrder + 1]);
+        $stmt     = $db->prepare('INSERT INTO teams (draft_id, name, draft_order, pin) VALUES (?, ?, ?, ?)');
+        $stmt->execute([$draftId, $data['name'], $maxOrder + 1, $pin]);
         $id   = $db->lastInsertId();
         $stmt = $db->prepare('SELECT * FROM teams WHERE id=?');
         $stmt->execute([$id]);
@@ -60,6 +65,42 @@ try {
         $draftId = contextDraftId($db);
         $db->prepare('DELETE FROM teams WHERE draft_id=?')->execute([$draftId]);
         jsonResponse(['success' => true]);
+
+    } elseif ($action === 'bulk_create') {
+        requireAdmin();
+        $draftId = contextDraftId($db);
+        $data    = getInput();
+        $teams   = $data['teams'] ?? [];
+        $clear   = !empty($data['clear_existing']);
+
+        if (!is_array($teams) || count($teams) < 2 || count($teams) > 16) {
+            jsonError('Must provide 2–16 teams');
+        }
+        foreach ($teams as $t) {
+            if (empty($t['name']) || trim($t['name']) === '') jsonError('All team names are required');
+        }
+
+        $db->beginTransaction();
+        if ($clear) {
+            $db->prepare('DELETE FROM picks WHERE draft_id=?')->execute([$draftId]);
+            $db->prepare('DELETE FROM teams WHERE draft_id=?')->execute([$draftId]);
+            $startOrder = 1;
+        } else {
+            $maxStmt = $db->prepare('SELECT COALESCE(MAX(draft_order),0) FROM teams WHERE draft_id=?');
+            $maxStmt->execute([$draftId]);
+            $startOrder = (int)$maxStmt->fetchColumn() + 1;
+        }
+
+        $ins = $db->prepare('INSERT INTO teams (draft_id, name, draft_order, pin) VALUES (?, ?, ?, ?)');
+        foreach ($teams as $i => $t) {
+            $pin = trim($t['pin'] ?? '') ?: null;
+            $ins->execute([$draftId, trim($t['name']), $startOrder + $i, $pin]);
+        }
+        $db->commit();
+
+        $allStmt = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
+        $allStmt->execute([$draftId]);
+        jsonResponse(['teams' => $allStmt->fetchAll()]);
 
     } else {
         jsonError('Unknown action', 404);
