@@ -69,13 +69,24 @@ function applyRole() {
     isAdmin ? '(Admin)' : isTeam ? '(Team)' : '(Coach \u2014 view only)';
 }
 
+// Prevent mobile autofill on login text fields by keeping them readonly
+// until the user actually taps/focuses them (browsers skip autofill on readonly fields)
+['login-league', 'login-team'].forEach(id => {
+  const el = document.getElementById(id);
+  el.setAttribute('readonly', '');
+  el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
+});
+
 // Login type toggle
 document.querySelectorAll('.login-type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.login-type-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('login-team-row')
-      .classList.toggle('hidden', btn.dataset.mode !== 'team');
+    const teamEl = document.getElementById('login-team');
+    const isTeam = btn.dataset.mode === 'team';
+    document.getElementById('login-team-row').classList.toggle('hidden', !isTeam);
+    // Re-apply readonly when switching modes so autofill can't sneak in
+    if (isTeam) { teamEl.value = ''; teamEl.setAttribute('readonly', ''); }
   });
 });
 
