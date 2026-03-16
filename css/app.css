@@ -753,27 +753,28 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; border-top: 1px solid var(--border);
 }
-.mobile-pick-row.is-filled   { background: var(--cell-picked-bg); }
+.mobile-pick-row.is-filled   { background: #bbf7d0; }
 .mobile-pick-row.is-on-clock { background: var(--cell-current-bg); animation: cell-flash 1.1s ease-in-out infinite; }
 
 .mobile-pick-num {
   font-size: 11px; font-weight: 700; min-width: 32px;
   color: var(--text3);
 }
-.mobile-pick-row.is-filled   .mobile-pick-num,
+.mobile-pick-row.is-filled   .mobile-pick-num { color: rgba(20,83,45,.6); }
 .mobile-pick-row.is-on-clock .mobile-pick-num { color: rgba(255,255,255,.6); }
 
 .mobile-pick-team {
   font-size: 14px; font-weight: 600; flex: 1;
   color: var(--text);
 }
-.mobile-pick-row.is-filled   .mobile-pick-team,
+.mobile-pick-row.is-filled   .mobile-pick-team { color: #14532d; }
 .mobile-pick-row.is-on-clock .mobile-pick-team { color: #fff; }
 
 .mobile-pick-player {
   font-size: 14px; font-weight: 700; text-align: right;
   color: var(--cell-picked-txt);
 }
+.mobile-pick-row.is-filled   .mobile-pick-player { color: #14532d; }
 .mobile-pick-player.is-hidden { color: rgba(255,255,255,.4); letter-spacing: 3px; }
 .mobile-pick-player.is-clock  { color: rgba(255,255,255,.8); font-style: italic; font-weight: 400; }
 .mobile-pick-player.is-empty  { color: var(--text3); font-weight: 400; }
