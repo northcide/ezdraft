@@ -380,11 +380,11 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 /* Team header cells */
 .board-table th {
-  background: var(--col-header-bg);
-  color: var(--col-header-txt);
+  background: var(--th-bg);
+  color: var(--th-txt);
   padding: 8px 6px;
   text-align: center;
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .4px;
