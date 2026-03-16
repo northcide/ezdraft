@@ -240,7 +240,8 @@ function applyState(data) {
   const totalEl = document.getElementById('timer-total');
   if (totalEl) {
     if (state.role === 'admin' && state.picks?.length && state.draft?.timer_minutes) {
-      const totalMins = state.picks.length * state.draft.timer_minutes;
+      const remaining = state.picks.filter(p => !p.player_id).length;
+      const totalMins = remaining * state.draft.timer_minutes;
       const h = Math.floor(totalMins / 60);
       const m = totalMins % 60;
       totalEl.textContent = h > 0 ? `(${h}h ${m}m)` : `(${m}m)`;
