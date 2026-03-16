@@ -335,12 +335,12 @@ try {
         $stmt = $db->prepare('SELECT pick_num FROM picks WHERE draft_id=? AND player_id IS NULL ORDER BY pick_num ASC LIMIT 1');
         $stmt->execute([$draft['id']]);
         $firstUnfilled = $stmt->fetchColumn() ?: 1;
-        $db->prepare("UPDATE drafts SET status='active', current_pick_num=?, completed_at=NULL, timer_end=NULL WHERE id=?")
+        $db->prepare("UPDATE drafts SET status='active', current_pick_num=?, completed_at=NULL, timer_end=NULL, timer_remaining_seconds=NULL WHERE id=?")
            ->execute([$firstUnfilled, $draft['id']]);
         $draft['status'] = 'active';
         $draft['current_pick_num'] = $firstUnfilled;
         advanceTimer($db, $draft);
-        jsonResponse(['success' => true]);
+        jsonResponse(fullState($db));
 
     } elseif ($action === 'reset_picks') {
         requireAdmin();
