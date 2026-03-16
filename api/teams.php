@@ -12,9 +12,8 @@ try {
         $stmt    = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
         $stmt->execute([$draftId]);
         $rows = $stmt->fetchAll();
-        if (currentRole() !== 'admin') {
-            $rows = array_map(fn($r) => array_diff_key($r, ['pin' => 1]), $rows);
-        }
+        // Replace pin with has_pin boolean for all roles
+        $rows = array_map(fn($r) => array_merge(array_diff_key($r, ['pin' => 1]), ['has_pin' => !empty($r['pin'])]), $rows);
         jsonResponse($rows);
 
     } elseif ($action === 'create') {
@@ -22,7 +21,8 @@ try {
         $draftId  = contextDraftId($db);
         $data     = getInput();
         if (empty($data['name'])) jsonError('name is required');
-        $pin      = trim($data['pin'] ?? '') ?: null;
+        $rawPin   = trim($data['pin'] ?? '');
+        $pin      = $rawPin !== '' ? hashPin($rawPin) : null;
         $maxStmt  = $db->prepare('SELECT COALESCE(MAX(draft_order),0) FROM teams WHERE draft_id=?');
         $maxStmt->execute([$draftId]);
         $maxOrder = (int)$maxStmt->fetchColumn();
@@ -31,7 +31,9 @@ try {
         $id   = $db->lastInsertId();
         $stmt = $db->prepare('SELECT * FROM teams WHERE id=?');
         $stmt->execute([$id]);
-        jsonResponse($stmt->fetch(), 201);
+        $row = $stmt->fetch();
+        $row = array_merge(array_diff_key($row, ['pin' => 1]), ['has_pin' => !empty($row['pin'])]);
+        jsonResponse($row, 201);
 
     } elseif ($action === 'update') {
         requireAdmin();
@@ -62,9 +64,10 @@ try {
 
     } elseif ($action === 'set_pin') {
         requireAdmin();
-        $data = getInput();
+        $data   = getInput();
         if (empty($data['id'])) jsonError('id is required');
-        $pin = trim($data['pin'] ?? '') ?: null;
+        $rawPin = trim($data['pin'] ?? '');
+        $pin    = $rawPin !== '' ? hashPin($rawPin) : null;
         $db->prepare('UPDATE teams SET pin=? WHERE id=?')->execute([$pin, (int)$data['id']]);
         jsonResponse(['success' => true]);
 
@@ -101,19 +104,25 @@ try {
 
         $ins = $db->prepare('INSERT INTO teams (draft_id, name, draft_order, pin) VALUES (?, ?, ?, ?)');
         foreach ($teams as $i => $t) {
-            $pin = trim($t['pin'] ?? '') ?: null;
+            $rawPin = trim($t['pin'] ?? '');
+            $pin    = $rawPin !== '' ? hashPin($rawPin) : null;
             $ins->execute([$draftId, trim($t['name']), $startOrder + $i, $pin]);
         }
         $db->commit();
 
         $allStmt = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
         $allStmt->execute([$draftId]);
-        jsonResponse(['teams' => $allStmt->fetchAll()]);
+        $allTeams = array_map(
+            fn($r) => array_merge(array_diff_key($r, ['pin' => 1]), ['has_pin' => !empty($r['pin'])]),
+            $allStmt->fetchAll()
+        );
+        jsonResponse(['teams' => $allTeams]);
 
     } else {
         jsonError('Unknown action', 404);
     }
 
 } catch (PDOException $e) {
-    jsonError('Database error: ' . $e->getMessage(), 500);
+    error_log('EasyDraft teams error: ' . $e->getMessage());
+    jsonError('A server error occurred', 500);
 }

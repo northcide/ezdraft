@@ -7,7 +7,7 @@
 
 // Refuse to run if setup has already been completed
 if (file_exists(__DIR__ . '/config.php')) {
-    http_response_code(403);
+    http_response_code(404);
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -83,7 +83,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             // Save settings
             $stmt = $pdo->prepare("INSERT INTO settings (`key`, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)");
             $stmt->execute(['league_name', $league]);
-            $stmt->execute(['admin_pin',   $adminPin]);
+            $stmt->execute(['admin_pin',   password_hash($adminPin, PASSWORD_DEFAULT)]);
 
             $success = "Setup complete! You can now <a href=\"../\">open EasyDraft</a>.";
         } catch (Exception $e) {

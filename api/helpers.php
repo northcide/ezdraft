@@ -1,9 +1,19 @@
 <?php
 // ── CORS + JSON headers ───────────────────────────────────────────────────────
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('X-XSS-Protection: 1; mode=block');
+
+// Restrict CORS to specific allowed origins only
+$allowedOrigins = ['https://draft.jirc.com'];
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($origin, $allowedOrigins, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, X-CSRF-Token');
+}
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 // ── Session ───────────────────────────────────────────────────────────────────
@@ -19,6 +29,9 @@ if (session_status() === PHP_SESSION_NONE) {
         'samesite' => 'Lax',
     ]);
     session_start();
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
 }
 
 // ── Database ──────────────────────────────────────────────────────────────────
@@ -45,6 +58,64 @@ function getDB(): PDO {
     return $pdo;
 }
 
+// ── CSRF ──────────────────────────────────────────────────────────────────────
+function validateCsrf(): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+    $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        jsonError('Invalid or missing CSRF token', 403);
+    }
+}
+
+// ── Rate limiting (file-based, per IP) ────────────────────────────────────────
+function _rlFile(string $ip): string {
+    return sys_get_temp_dir() . '/easydraft_rl_' . md5($ip) . '.json';
+}
+
+function checkRateLimit(string $ip): void {
+    $file = _rlFile($ip);
+    $data = file_exists($file) ? json_decode(file_get_contents($file), true) : null;
+    if (!$data || time() > ($data['reset'] ?? 0)) return;
+    if (($data['count'] ?? 0) >= 10) {
+        jsonError('Too many login attempts. Please try again later.', 429);
+    }
+}
+
+function recordFailedLogin(string $ip): void {
+    $file = _rlFile($ip);
+    $data = file_exists($file) ? json_decode(file_get_contents($file), true) : null;
+    if (!$data || time() > ($data['reset'] ?? 0)) {
+        $data = ['count' => 0, 'reset' => time() + 300];
+    }
+    $data['count']++;
+    file_put_contents($file, json_encode($data), LOCK_EX);
+}
+
+function clearRateLimit(string $ip): void {
+    $file = _rlFile($ip);
+    if (file_exists($file)) unlink($file);
+}
+
+// ── PIN helpers ───────────────────────────────────────────────────────────────
+function verifyPin(string $input, string $stored): bool {
+    if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$2a$')) {
+        return password_verify($input, $stored);
+    }
+    // Legacy plaintext — constant-time compare
+    return hash_equals($stored, $input);
+}
+
+function hashPin(string $pin): string {
+    return password_hash($pin, PASSWORD_DEFAULT);
+}
+
+function rehashPinIfNeeded(PDO $db, string $pin, string $stored, string $table, string $col, string $whereCol, mixed $whereVal): void {
+    if (!str_starts_with($stored, '$2y$') && !str_starts_with($stored, '$2a$')) {
+        $db->prepare("UPDATE `$table` SET `$col`=? WHERE `$whereCol`=?")
+           ->execute([hashPin($pin), $whereVal]);
+    }
+}
+
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 function currentRole(): string {
     return $_SESSION['role'] ?? '';
@@ -54,12 +125,14 @@ function requireAuth(): void {
     if (empty($_SESSION['role'])) {
         jsonError('Not authenticated', 401);
     }
+    validateCsrf();
 }
 
 function requireAdmin(): void {
     if (($_SESSION['role'] ?? '') !== 'admin') {
         jsonError('Admin access required', 403);
     }
+    validateCsrf();
 }
 
 // ── Draft context ─────────────────────────────────────────────────────────────

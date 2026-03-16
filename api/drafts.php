@@ -127,11 +127,14 @@ try {
         $accessibleDrafts = null;
 
         if ($role === 'admin') {
-            $allDrafts = $db->query(
-                'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
-                        coach_name, coach_pin, coach_mode, created_at, started_at, completed_at
-                 FROM drafts ORDER BY created_at DESC'
-            )->fetchAll();
+            $allDrafts = array_map(
+                fn($d) => array_merge(array_diff_key($d, ['coach_pin' => 1]), ['has_coach_pin' => !empty($d['coach_pin'])]),
+                $db->query(
+                    'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
+                            coach_name, coach_pin, coach_mode, created_at, started_at, completed_at
+                     FROM drafts ORDER BY created_at DESC'
+                )->fetchAll()
+            );
         } elseif ($role === 'coach') {
             $ids = array_map('intval', $_SESSION['accessible_draft_ids'] ?? []);
             if (!empty($ids)) {
@@ -170,11 +173,14 @@ try {
 
     } elseif ($action === 'list') {
         requireAdmin();
-        $drafts = $db->query(
-            'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
-                    coach_name, coach_pin, created_at, started_at, completed_at
-             FROM drafts ORDER BY created_at DESC'
-        )->fetchAll();
+        $drafts = array_map(
+            fn($d) => array_merge(array_diff_key($d, ['coach_pin' => 1]), ['has_coach_pin' => !empty($d['coach_pin'])]),
+            $db->query(
+                'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
+                        coach_name, coach_pin, created_at, started_at, completed_at
+                 FROM drafts ORDER BY created_at DESC'
+            )->fetchAll()
+        );
         jsonResponse($drafts);
 
     } elseif ($action === 'create') {
@@ -224,10 +230,16 @@ try {
         if ($draft['status'] === 'active') jsonError('Cannot change settings while draft is active');
 
         $name      = isset($data['name'])             ? trim($data['name'])             : $draft['name'];
-        $timer     = isset($data['timer_minutes'])     ? (int)$data['timer_minutes']     : $draft['timer_minutes'];
+        $timer     = isset($data['timer_minutes'])     ? max(1, min(60, (int)$data['timer_minutes'])) : $draft['timer_minutes'];
         $auto      = isset($data['auto_pick_enabled']) ? (int)$data['auto_pick_enabled'] : $draft['auto_pick_enabled'];
         $coachName = array_key_exists('coach_name', $data) ? (trim($data['coach_name']) ?: null) : $draft['coach_name'];
-        $coachPin  = array_key_exists('coach_pin',  $data) ? (trim($data['coach_pin'])  ?: null) : $draft['coach_pin'];
+        // Only update coach_pin if a new non-empty value is provided; hash it before storing
+        $rawPin    = array_key_exists('coach_pin', $data) ? trim($data['coach_pin']) : null;
+        if ($rawPin !== null) {
+            $coachPin = $rawPin !== '' ? hashPin($rawPin) : null;
+        } else {
+            $coachPin = $draft['coach_pin'];
+        }
         $coachMode = in_array($data['coach_mode'] ?? '', ['shared', 'team']) ? $data['coach_mode'] : ($draft['coach_mode'] ?? 'shared');
 
         $db->prepare('UPDATE drafts SET name=?, timer_minutes=?, auto_pick_enabled=?, coach_name=?, coach_pin=?, coach_mode=? WHERE id=?')
@@ -355,10 +367,7 @@ try {
 
     } elseif ($action === 'pick') {
         $role = currentRole();
-        if ($role !== 'admin') {
-            if ($role !== 'team') jsonError('Forbidden', 403);
-            // Will verify this pick belongs to the logged-in team after loading draft
-        }
+        if ($role !== 'admin' && $role !== 'team') jsonError('Forbidden', 403);
         $data  = getInput();
         $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
@@ -580,5 +589,6 @@ try {
     }
 
 } catch (PDOException $e) {
-    jsonError('Database error: ' . $e->getMessage(), 500);
+    error_log('EasyDraft drafts error: ' . $e->getMessage());
+    jsonError('A server error occurred', 500);
 }

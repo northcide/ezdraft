@@ -33,6 +33,7 @@ const state = {
   mobileExpandedRounds:     new Set(),
   mobileCurrentRound:       0,
   lastManualPickNum:        null,
+  csrfToken:                null,
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ async function checkAuth() {
     state.role            = data.role;
     state.leagueName      = data.league_name;
     state.accessibleDrafts = data.accessibleDrafts || [];
+    if (data.csrf_token) state.csrfToken = data.csrf_token;
     applyRole();
     document.getElementById('login-overlay').classList.add('hidden');
     return true;
@@ -93,6 +95,7 @@ document.getElementById('login-form').addEventListener('submit', async e => {
     state.leagueName       = data.league_name;
     state.teamId           = data.team_id ?? null;
     state.accessibleDrafts = data.accessibleDrafts || [];
+    if (data.csrf_token) state.csrfToken = data.csrf_token;
     applyRole();
     document.getElementById('login-overlay').classList.add('hidden');
     await init();
@@ -120,12 +123,13 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function api(endpoint, action, body = null) {
-  const url  = `${endpoint}?action=${action}`;
-  const opts = {
-    method:  body ? 'POST' : 'GET',
-    headers: body ? { 'Content-Type': 'application/json' } : {},
-    body:    body ? JSON.stringify(body) : undefined,
-  };
+  const url     = `${endpoint}?action=${action}`;
+  const headers = {};
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+    if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
+  }
+  const opts = { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined };
   const res  = await fetch(url, opts);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -133,7 +137,9 @@ async function api(endpoint, action, body = null) {
 }
 
 async function apiForm(endpoint, action, formData) {
-  const res  = await fetch(`${endpoint}?action=${action}`, { method: 'POST', body: formData });
+  const headers = {};
+  if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
+  const res  = await fetch(`${endpoint}?action=${action}`, { method: 'POST', body: formData, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
@@ -391,8 +397,9 @@ function fillSettingsForm() {
     nameEl.value      = d.name          || '';
     timerEl.value     = d.timer_minutes || 2;
     autoEl.checked    = !!d.auto_pick_enabled;
-    coachNameEl.value = d.coach_name    || '';
-    coachPinEl.value  = d.coach_pin     || '';
+    coachNameEl.value   = d.coach_name  || '';
+    coachPinEl.value    = '';
+    coachPinEl.placeholder = d.has_coach_pin ? '(PIN set — leave blank to keep)' : 'Set a PIN';
   } else {
     nameEl.value = ''; timerEl.value = 2;
     autoEl.checked = true; coachNameEl.value = ''; coachPinEl.value = '';
@@ -457,7 +464,10 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     timer_minutes:     parseInt(document.getElementById('setting-timer').value, 10),
     auto_pick_enabled: document.getElementById('setting-autopick').checked ? 1 : 0,
     coach_name:        document.getElementById('setting-coach-name').value.trim(),
-    coach_pin:         document.getElementById('setting-coach-pin').value.trim(),
+    // Only send coach_pin if a new value was entered; omitting keeps the existing PIN
+    ...(document.getElementById('setting-coach-pin').value.trim()
+        ? { coach_pin: document.getElementById('setting-coach-pin').value.trim() }
+        : {}),
     coach_mode:        document.querySelector('input[name="coach_mode"]:checked')?.value ?? 'shared',
   };
   try {
@@ -691,7 +701,7 @@ function renderRankings() {
       // Keep available players + own team's picks (so coaches/teams can see their roster)
       players = players.filter(p => {
         if (!draftedIds.has(Number(p.id))) return true;
-        return draftedByTeam[Number(p.id)]?.teamId == state.teamId;
+        return draftedByTeam[Number(p.id)]?.teamId === Number(state.teamId);
       });
     } else {
       players = players.filter(p => !draftedIds.has(Number(p.id)));
@@ -706,12 +716,12 @@ function renderRankings() {
   list.innerHTML = '';
   const isMyTurnNow = state.role === 'team'
     && state.draft?.status === 'active'
-    && currentPickTeamId() == state.teamId;  // loose equality (int vs string)
+    && Number(currentPickTeamId()) === Number(state.teamId);
 
   players.forEach(p => {
     const drafted   = draftedIds.has(Number(p.id));
     const pickInfo  = draftedByTeam[Number(p.id)];
-    const isMyPick  = drafted && pickInfo?.teamId == state.teamId
+    const isMyPick  = drafted && pickInfo?.teamId === Number(state.teamId)
                       && (state.role === 'coach' || state.role === 'team');
 
     const card = document.createElement('div');
@@ -860,7 +870,7 @@ function renderMobileBoard() {
       if (state.role === 'coach' || state.role === 'team') {
         // Always show own team's picks so the roster is visible
         players = players.filter(p =>
-          !draftedIds.has(Number(p.id)) || draftedByTeamM[Number(p.id)]?.teamId == state.teamId
+          !draftedIds.has(Number(p.id)) || draftedByTeamM[Number(p.id)]?.teamId === Number(state.teamId)
         );
       } else {
         players = players.filter(p => !draftedIds.has(Number(p.id)));
@@ -879,7 +889,7 @@ function renderMobileBoard() {
       players.forEach(p => {
         const isDrafted = draftedIds.has(Number(p.id));
         const pickInfo  = draftedByTeamM[Number(p.id)];
-        const isMyPick  = isDrafted && pickInfo?.teamId == state.teamId
+        const isMyPick  = isDrafted && pickInfo?.teamId === Number(state.teamId)
                           && (state.role === 'coach' || state.role === 'team');
 
         const row = document.createElement('div');
