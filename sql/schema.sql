@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS picks (
   picked_at        DATETIME DEFAULT NULL,
   created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_draft_pick (draft_id, pick_num),
+  UNIQUE KEY unique_draft_player (draft_id, player_id),
   INDEX idx_draft_id (draft_id),
   INDEX idx_player_id (player_id),
   FOREIGN KEY (draft_id)  REFERENCES drafts(id)  ON DELETE CASCADE,
