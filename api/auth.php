@@ -20,14 +20,33 @@ try {
         $data     = getInput();
         $league   = trim($data['league_name'] ?? '');
         $pin      = trim($data['pin'] ?? '');
+        $mode     = trim($data['mode'] ?? 'admin');
         $teamName = trim($data['team_name'] ?? '');
 
         if ($league === '') jsonError('League name is required');
+        if ($pin === '')    jsonError('PIN is required');
 
         $db = getDB();
 
-        // Team login path (when team_name is present)
+        if ($mode === 'admin') {
+            // Admin-only path
+            $row = $db->query(
+                "SELECT `key`, value FROM settings WHERE `key` IN ('league_name','admin_pin')"
+            )->fetchAll(PDO::FETCH_KEY_PAIR);
+
+            if (strcasecmp($league, $row['league_name'] ?? '') === 0 && $pin === ($row['admin_pin'] ?? '')) {
+                $_SESSION['role']        = 'admin';
+                $_SESSION['league_name'] = $row['league_name'];
+                unset($_SESSION['accessible_draft_ids'], $_SESSION['selected_draft_id']);
+                jsonResponse(['role' => 'admin', 'league_name' => $row['league_name']]);
+            }
+
+            jsonError('League name or PIN not found', 401);
+        }
+
+        // Team tab path
         if ($teamName !== '') {
+            // Per-team login: draft name + team name + PIN
             $draftStmt = $db->prepare(
                 "SELECT id FROM drafts WHERE name = ? AND coach_mode = 'team'"
             );
@@ -49,21 +68,7 @@ try {
             jsonResponse(['role' => 'team', 'league_name' => $league]);
         }
 
-        if ($pin === '') jsonError('PIN is required');
-
-        $row = $db->query(
-            "SELECT `key`, value FROM settings WHERE `key` IN ('league_name','admin_pin')"
-        )->fetchAll(PDO::FETCH_KEY_PAIR);
-
-        // Check admin first
-        if (strcasecmp($league, $row['league_name'] ?? '') === 0 && $pin === ($row['admin_pin'] ?? '')) {
-            $_SESSION['role']        = 'admin';
-            $_SESSION['league_name'] = $row['league_name'];
-            unset($_SESSION['accessible_draft_ids'], $_SESSION['selected_draft_id']);
-            jsonResponse(['role' => 'admin', 'league_name' => $row['league_name']]);
-        }
-
-        // Check per-draft coach credentials
+        // Shared coach login: coach_name + coach_pin (no team name)
         $stmt = $db->prepare(
             "SELECT id, name FROM drafts WHERE LOWER(coach_name)=LOWER(?) AND coach_pin=? AND coach_name IS NOT NULL AND coach_pin IS NOT NULL"
         );

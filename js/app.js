@@ -84,8 +84,9 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const isTeamMode = document.querySelector('.login-type-btn.active')?.dataset.mode === 'team';
   const errEl     = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  const payload = { league_name: league, pin };
-  if (isTeamMode) payload.team_name = document.getElementById('login-team').value.trim();
+  const teamName = isTeamMode ? document.getElementById('login-team').value.trim() : '';
+  const payload = { league_name: league, pin, mode: isTeamMode ? 'team' : 'admin' };
+  if (isTeamMode && teamName !== '') payload.team_name = teamName;
   try {
     const data = await api(API.auth, 'login', payload);
     state.role             = data.role;

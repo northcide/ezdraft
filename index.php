@@ -18,14 +18,14 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     <div id="login-error" class="login-error hidden"></div>
     <form id="login-form" autocomplete="off">
       <div id="login-type-toggle" class="login-type-toggle">
-        <button type="button" class="login-type-btn" data-mode="admin">Admin / Coach</button>
+        <button type="button" class="login-type-btn" data-mode="admin">Admin</button>
         <button type="button" class="login-type-btn active" data-mode="team">Team</button>
       </div>
       <label class="login-label">League / Draft Name</label>
       <input id="login-league" type="text" class="login-input" placeholder="Enter league or draft name" autocomplete="off">
       <div id="login-team-row">
-        <label class="login-label">Team Name</label>
-        <input id="login-team" type="text" class="login-input" placeholder="Enter team name" autocomplete="off">
+        <label class="login-label">Team Name <span style="font-weight:400;opacity:.7">(optional)</span></label>
+        <input id="login-team" type="text" class="login-input" placeholder="Team name (leave blank for shared coach login)" autocomplete="off">
       </div>
       <label class="login-label">PIN</label>
       <input id="login-pin" type="password" class="login-input" placeholder="Enter PIN" autocomplete="new-password">
