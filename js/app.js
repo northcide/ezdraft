@@ -207,6 +207,10 @@ function applyState(data) {
   state.players         = data.players || [];
   if (data.role)             state.role            = data.role;
   if (data.team_id !== undefined) state.teamId     = data.team_id;
+  if (state.role === 'team' && state.teamId) {
+    const teamName = state.teams.find(t => t.id == state.teamId)?.name;
+    if (teamName) document.getElementById('topbar-role').textContent = `(${teamName})`;
+  }
   if (data.allDrafts)        state.allDrafts        = data.allDrafts;
   if (data.accessibleDrafts) state.accessibleDrafts = data.accessibleDrafts;
   if (data.selectedDraftId !== undefined) state.selectedDraftId = data.selectedDraftId;
