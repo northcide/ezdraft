@@ -1130,12 +1130,24 @@ function fitBoardToScreen() {
   wrap.querySelectorAll('tbody .board-cell').forEach(cell => { cell.style.height = cellH + 'px'; });
 }
 
-async function clearPick(pickNum) {
-  if (!confirm(`Clear pick #${pickNum}?`)) return;
-  try {
-    await api(API.drafts, 'clear_pick', { pick_num: pickNum });
-    await fetchState();
-  } catch (e) { alert('Error: ' + e.message); }
+function clearPick(pickNum) {
+  const pick = state.picks.find(p => p.pick_num == pickNum);
+  const playerName = pick?.player_name || `pick #${pickNum}`;
+
+  document.getElementById('pick-confirm-text').textContent =
+    `Remove "${playerName}" from pick #${pickNum}?`;
+  document.getElementById('pick-confirm-modal').classList.remove('hidden');
+
+  const confirmBtn = document.getElementById('btn-pick-confirm');
+  const handler = async () => {
+    confirmBtn.removeEventListener('click', handler);
+    document.getElementById('pick-confirm-modal').classList.add('hidden');
+    try {
+      await api(API.drafts, 'clear_pick', { pick_num: pickNum });
+      await fetchState();
+    } catch (e) { alert('Error: ' + e.message); }
+  };
+  confirmBtn.addEventListener('click', handler);
 }
 
 // ── Drag and Drop ─────────────────────────────────────────────────────────────
