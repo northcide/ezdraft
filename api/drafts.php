@@ -33,7 +33,10 @@ try {
     function sortedTeams(PDO $db, int $draftId): array {
         $stmt = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
         $stmt->execute([$draftId]);
-        return $stmt->fetchAll();
+        return array_map(
+            fn($r) => array_merge(array_diff_key($r, ['pin' => 1]), ['has_pin' => !empty($r['pin'])]),
+            $stmt->fetchAll()
+        );
     }
 
     function snakeTeamForPick(array $teams, int $pickNum): array {

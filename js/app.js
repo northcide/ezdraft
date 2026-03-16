@@ -1234,7 +1234,7 @@ function renderTeamList() {
       item.innerHTML =
         `<span class="team-order">${t.draft_order}.</span>` +
         `<input type="text" class="team-name-input input-sm" value="${esc(t.name)}" title="Team name">` +
-        `<input type="text" class="team-pin-input input-sm" placeholder="PIN" value="${esc(t.pin || '')}" title="Team login PIN">` +
+        `<input type="text" class="team-pin-input input-sm" placeholder="${t.has_pin ? '(PIN set — leave blank to keep)' : 'Set a PIN'}" title="Team login PIN">` +
         `<button class="team-pin-set btn btn-sm btn-secondary">Set</button>` +
         `<button class="btn-delete" title="Remove">\u2715</button>`;
 
@@ -1264,7 +1264,7 @@ function renderTeamList() {
           pinBtn.classList.add('btn-success');
           setTimeout(() => { pinBtn.textContent = 'Set'; pinBtn.classList.remove('btn-success'); }, 1500);
           const team = state.teams.find(x => x.id === t.id);
-          if (team) team.pin = pin || null;
+          if (team) { team.has_pin = pin !== ''; delete team.pin; }
         } catch (e) { alert('Error: ' + e.message); }
       };
 
