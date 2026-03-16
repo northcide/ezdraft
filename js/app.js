@@ -158,9 +158,11 @@ function applyState(data) {
 
   // Detect newly filled picks for coaches — they don't trigger makePick themselves
   if (state.role === 'coach') {
+    const isInitialLoad  = state.draft === null;
+    const isDraftSwitch  = state.draft?.id !== data.draft?.id;
     const oldFilled = new Set((state.picks || []).filter(p => p.player_id).map(p => p.pick_num));
     const newlyFilled = (data.picks || []).filter(p => p.player_id && !oldFilled.has(p.pick_num));
-    if (newlyFilled.length > 0) {
+    if (!isInitialLoad && !isDraftSwitch && data.draft?.status === 'active' && newlyFilled.length > 0) {
       const pick = newlyFilled[newlyFilled.length - 1];
       showAnnouncement(pick, { name: pick.player_name, position: pick.player_position || '' });
     }
@@ -788,6 +790,7 @@ function isMobileCoach() {
 
 // ── Board ─────────────────────────────────────────────────────────────────────
 function renderBoard() {
+  document.getElementById('rankings-panel').classList.toggle('hidden', isMobileCoach());
   if (isMobileCoach()) { renderMobileBoard(); return; }
   const wrap = document.getElementById('board-wrap');
   const banner = document.getElementById('draft-complete-banner');

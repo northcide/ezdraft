@@ -588,9 +588,6 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* Topbar role label */
 .topbar-role { font-size: 12px; color: rgba(255,255,255,.6); font-style: italic; }
 
-/* Coach view: board fills full width */
-body.role-coach #rankings-panel { display: none; }
-
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #rankings-panel { width: 200px; }
