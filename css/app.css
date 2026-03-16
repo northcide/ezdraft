@@ -320,6 +320,13 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   justify-content: center; min-width: 0; overflow: hidden;
 }
 .draft-bar-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
+.font-size-controls { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.btn-font {
+  background: none; border: 1px solid #ccc; border-radius: 4px;
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  padding: 2px 6px; cursor: pointer; line-height: 1.4; user-select: none;
+}
+.btn-font:hover { background: #e8f0fe; border-color: var(--accent); color: var(--accent); }
 .draft-bar-name {
   font-size: 14px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .5px; color: var(--text2); white-space: nowrap;
@@ -481,7 +488,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   width: 100%;
   height: 100%;
   padding: 2px 6px;
-  font-size: 20px;
+  font-size: var(--cell-player-size, 17px);
   font-weight: 900;
   color: var(--cell-picked-txt);
   line-height: 1.1;
@@ -617,7 +624,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #rankings-panel { width: 200px; }
-  .cell-player { font-size: 14px; }
+  .cell-player { font-size: var(--cell-player-size, 14px); }
   .board-table th { font-size: 12px; }
 }
 @media (max-width: 767px) {

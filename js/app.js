@@ -1540,6 +1540,29 @@ function fmtDate(iso) {
 
 window.addEventListener('resize', () => { fitBoardToScreen(); renderBoard(); });
 
+// ── Board font size controls ───────────────────────────────────────────────────
+(function () {
+  const MIN = 10, MAX = 28, STEP = 1, KEY = 'easydraft_cell_font_size', DEFAULT = 17;
+  function applyFontSize(px) {
+    document.documentElement.style.setProperty('--cell-player-size', px + 'px');
+  }
+  const saved = parseInt(localStorage.getItem(KEY), 10);
+  applyFontSize(saved >= MIN && saved <= MAX ? saved : DEFAULT);
+
+  document.getElementById('btn-font-inc').addEventListener('click', () => {
+    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-player-size'), 10) || DEFAULT;
+    const next = Math.min(MAX, cur + STEP);
+    applyFontSize(next);
+    localStorage.setItem(KEY, next);
+  });
+  document.getElementById('btn-font-dec').addEventListener('click', () => {
+    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-player-size'), 10) || DEFAULT;
+    const next = Math.max(MIN, cur - STEP);
+    applyFontSize(next);
+    localStorage.setItem(KEY, next);
+  });
+}());
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   await fetchState(); // applyState inside handles polling and timer startup

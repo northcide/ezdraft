@@ -111,6 +111,12 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
       <span id="draft-complete-banner" class="draft-complete-banner hidden">&#127942; Draft Complete &mdash; Final Results</span>
     </div>
 
+    <!-- Font size controls (all roles) -->
+    <div class="font-size-controls">
+      <button id="btn-font-dec" class="btn-font" title="Decrease text size">A&#8722;</button>
+      <button id="btn-font-inc" class="btn-font" title="Increase text size">A+</button>
+    </div>
+
     <!-- Admin: draft controls (right) -->
     <div id="board-controls-bar" class="draft-bar-right admin-only hidden">
       <button id="btn-start"        class="btn btn-sm btn-success" disabled>&#9654; Start</button>
