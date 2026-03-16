@@ -67,7 +67,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
     </div>
     <div class="topbar-center" id="timer-area">
       <div id="timer-display" class="timer-display hidden">
-        <span id="timer-countdown" class="timer-countdown">2:00</span>
+        <span id="timer-countdown" class="timer-countdown">2:00</span><span id="timer-total" class="timer-total admin-only"></span>
         <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
       </div>
     </div>
