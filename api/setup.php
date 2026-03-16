@@ -5,6 +5,37 @@
  * DELETE or restrict this file after setup is complete.
  */
 
+// Refuse to run if setup has already been completed
+if (file_exists(__DIR__ . '/config.php')) {
+    http_response_code(403);
+?><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EasyDraft Setup</title>
+<style>
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5;
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; padding: 24px; }
+  .card { background: #fff; border-radius: 10px;
+          box-shadow: 0 4px 24px rgba(0,0,0,.1);
+          padding: 36px 40px; width: 100%; max-width: 480px; }
+  h1 { font-size: 22px; font-weight: 800; color: #1e3a5f; margin-bottom: 12px; }
+  p  { font-size: 14px; color: #555; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>⚾ EasyDraft</h1>
+  <p>Setup has already been completed. If you need to reconfigure, remove
+     <code>api/config.php</code> and run setup again.</p>
+</div>
+</body>
+</html>
+<?php
+    exit;
+}
+
 $error   = '';
 $success = '';
 $step    = isset($_POST['step']) ? (int)$_POST['step'] : 0;
@@ -54,7 +85,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute(['league_name', $league]);
             $stmt->execute(['admin_pin',   $adminPin]);
 
-            $success = "Setup complete! <strong>Delete or restrict access to setup.php.</strong>";
+            $success = "Setup complete! You can now <a href=\"../\">open EasyDraft</a>.";
         } catch (Exception $e) {
             $error = 'Setup failed: ' . htmlspecialchars($e->getMessage());
         }
