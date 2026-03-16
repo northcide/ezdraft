@@ -118,6 +118,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
       <button id="btn-resume"       class="btn btn-sm btn-success hidden">&#9654; Resume</button>
       <button id="btn-end"          class="btn btn-sm btn-danger" disabled>&#9646; End</button>
       <button id="btn-autopick-now" class="btn btn-sm btn-secondary hidden">&#9889; Auto-pick</button>
+      <button id="btn-undo"        class="btn btn-sm btn-secondary hidden">&#8617; Undo</button>
     </div>
 
   </div>

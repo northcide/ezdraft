@@ -533,6 +533,32 @@ try {
         }
         jsonResponse(['success' => true]);
 
+    } elseif ($action === 'undo_pick') {
+        requireAdmin();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft found');
+
+        // Find the most recently filled, non-pre-assigned pick
+        $stmt = $db->prepare(
+            'SELECT * FROM picks WHERE draft_id=? AND player_id IS NOT NULL
+             ORDER BY pick_num DESC LIMIT 1'
+        );
+        $stmt->execute([$draft['id']]);
+        $lastPick = $stmt->fetch();
+        if (!$lastPick) jsonError('No picks to undo');
+
+        // Clear the pick
+        $db->prepare('UPDATE picks SET player_id=NULL, is_auto_pick=0, is_pre_assigned=0, picked_at=NULL WHERE id=?')
+           ->execute([$lastPick['id']]);
+
+        // Restore draft state: go back to this pick_num, reactivate if completed
+        $newStatus = ($draft['status'] === 'completed') ? 'active' : $draft['status'];
+        $db->prepare(
+            "UPDATE drafts SET current_pick_num=?, status=?, completed_at=IF(?='completed',completed_at,NULL), timer_end=NULL, timer_remaining_seconds=NULL WHERE id=?"
+        )->execute([$lastPick['pick_num'], $newStatus, $draft['status'], $draft['id']]);
+
+        jsonResponse(fullState($db));
+
     } elseif ($action === 'clear_pick') {
         requireAdmin();
         $data    = getInput();

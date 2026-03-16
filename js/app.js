@@ -1303,12 +1303,14 @@ function updateControls() {
   const btnResume     = document.getElementById('btn-resume');
   const btnEnd        = document.getElementById('btn-end');
   const btnAutopick   = document.getElementById('btn-autopick-now');
+  const btnUndo       = document.getElementById('btn-undo');
   const btnResetPicks = document.getElementById('btn-reset-picks');
   const bar           = document.getElementById('board-controls-bar');
 
   if (bar) bar.classList.toggle('hidden', !state.draft || state.role !== 'admin');
 
-  const isCompleted = status === 'completed';
+  const isCompleted  = status === 'completed';
+  const hasFilledPick = state.picks.some(p => p.player_id);
   btnStart.classList.toggle('hidden', isCompleted);
   btnStart.disabled  = !(status === 'setup');
   btnRestart.classList.toggle('hidden', !isCompleted);
@@ -1316,6 +1318,7 @@ function updateControls() {
   btnPause.classList.toggle('hidden',    status !== 'active');
   btnResume.classList.toggle('hidden',   status !== 'paused');
   btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
+  btnUndo.classList.toggle('hidden', !(hasFilledPick && (status === 'active' || status === 'paused' || status === 'completed')));
   if (btnResetPicks) btnResetPicks.disabled = (status === 'active');
 }
 
@@ -1390,6 +1393,14 @@ document.getElementById('btn-reset-picks').addEventListener('click', async () =>
   try {
     const data = await api(API.drafts, 'reset_picks', {});
     applyState(data);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+document.getElementById('btn-undo').addEventListener('click', async () => {
+  try {
+    const data = await api(API.drafts, 'undo_pick', {});
+    applyState(data);
+    if (state.draft?.status === 'active') { stopTimer(); startTimer(); }
   } catch (e) { alert('Error: ' + e.message); }
 });
 
