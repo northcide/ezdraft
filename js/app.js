@@ -69,24 +69,23 @@ function applyRole() {
     isAdmin ? '(Admin)' : isTeam ? '(Team)' : '(Coach \u2014 view only)';
 }
 
-// Prevent mobile autofill on login text fields by keeping them readonly
-// until the user actually taps/focuses them (browsers skip autofill on readonly fields)
-['login-league', 'login-team'].forEach(id => {
-  const el = document.getElementById(id);
-  el.setAttribute('readonly', '');
-  el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
-});
+// Track whether the user actually typed in the team name field.
+// Browser autofill does NOT reliably fire 'input', so only a real keystroke
+// sets this flag. If autofill populates the field, the flag stays false and
+// we ignore the autofilled value at submit time.
+let teamNameUserTyped = false;
+const _teamLoginEl = document.getElementById('login-team');
+_teamLoginEl.addEventListener('input', () => { teamNameUserTyped = true; });
 
 // Login type toggle
 document.querySelectorAll('.login-type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.login-type-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const teamEl = document.getElementById('login-team');
     const isTeam = btn.dataset.mode === 'team';
     document.getElementById('login-team-row').classList.toggle('hidden', !isTeam);
-    // Re-apply readonly when switching modes so autofill can't sneak in
-    if (isTeam) { teamEl.value = ''; teamEl.setAttribute('readonly', ''); }
+    // Clear team name and reset the "user typed" flag whenever mode switches
+    if (isTeam) { _teamLoginEl.value = ''; teamNameUserTyped = false; }
   });
 });
 
@@ -97,7 +96,8 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const isTeamMode = document.querySelector('.login-type-btn.active')?.dataset.mode === 'team';
   const errEl     = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  const teamName = isTeamMode ? document.getElementById('login-team').value.trim() : '';
+  // Only treat team name as intentional if the user actually typed it
+  const teamName = (isTeamMode && teamNameUserTyped) ? _teamLoginEl.value.trim() : '';
   const payload = { league_name: league, pin, mode: isTeamMode ? 'team' : 'admin' };
   if (isTeamMode && teamName !== '') payload.team_name = teamName;
   try {
