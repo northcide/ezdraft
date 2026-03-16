@@ -1197,13 +1197,28 @@ function renderTeamList() {
     if (state.role === 'admin') {
       item.innerHTML =
         `<span class="team-order">${t.draft_order}.</span>` +
-        `<span class="team-name">${esc(t.name)}</span>` +
+        `<input type="text" class="team-name-input input-sm" value="${esc(t.name)}" title="Team name">` +
         `<input type="text" class="team-pin-input input-sm" placeholder="PIN" value="${esc(t.pin || '')}" title="Team login PIN">` +
         `<button class="team-pin-set btn btn-sm btn-secondary">Set</button>` +
         `<button class="btn-delete" title="Remove">\u2715</button>`;
 
-      const pinInput = item.querySelector('.team-pin-input');
-      const pinBtn   = item.querySelector('.team-pin-set');
+      const nameInput = item.querySelector('.team-name-input');
+      const pinInput  = item.querySelector('.team-pin-input');
+      const pinBtn    = item.querySelector('.team-pin-set');
+
+      const saveName = async () => {
+        const name = nameInput.value.trim();
+        if (!name || name === t.name) return;
+        try {
+          await api(API.teams, 'update', { id: t.id, name, draft_order: t.draft_order });
+          const team = state.teams.find(x => x.id === t.id);
+          if (team) team.name = name;
+          t.name = name;
+        } catch (e) { nameInput.value = t.name; alert('Error: ' + e.message); }
+      };
+
+      nameInput.addEventListener('blur', saveName);
+      nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
 
       const savePin = async () => {
         const pin = pinInput.value.trim();
@@ -1212,7 +1227,6 @@ function renderTeamList() {
           pinBtn.textContent = '✓';
           pinBtn.classList.add('btn-success');
           setTimeout(() => { pinBtn.textContent = 'Set'; pinBtn.classList.remove('btn-success'); }, 1500);
-          // Update local state so re-renders reflect the new pin
           const team = state.teams.find(x => x.id === t.id);
           if (team) team.pin = pin || null;
         } catch (e) { alert('Error: ' + e.message); }
