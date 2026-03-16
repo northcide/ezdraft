@@ -9,6 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 // ── Session ───────────────────────────────────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) {
     session_name('easydraft_session');
+    $lifetime = 8 * 60 * 60; // 8 hours
+    ini_set('session.gc_maxlifetime', $lifetime);
+    session_set_cookie_params([
+        'lifetime' => $lifetime,
+        'path'     => '/',
+        'secure'   => true,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 
