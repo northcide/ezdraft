@@ -29,6 +29,8 @@ const state = {
   teamsNeedSetup:       false,
   mobilePlayerListVisible:  false,
   mobileAvailableOnly:      true,
+  mobileExpandedRounds:     new Set(),
+  mobileCurrentRound:       0,
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -308,6 +310,8 @@ document.getElementById('coach-draft-selector').addEventListener('change', async
   const id = parseInt(this.value, 10);
   if (!id) return;
   try {
+    state.mobileExpandedRounds.clear();
+    state.mobileCurrentRound = 0;
     const data = await api(API.drafts, 'coach_select', { id });
     applyState(data);
   } catch (e) {
@@ -722,10 +726,19 @@ function renderMobileBoard() {
   }
 
   // ── Round cards ──
+  // Auto-expand the current round when it first appears or advances
+  const currentRound = n > 0 && currentNum > 0 ? Math.ceil(currentNum / n) : 1;
+  if (state.mobileCurrentRound !== currentRound) {
+    state.mobileCurrentRound = currentRound;
+    state.mobileExpandedRounds.add(currentRound);
+  }
+  if (state.mobileExpandedRounds.size === 0) state.mobileExpandedRounds.add(currentRound);
+
   for (let r = 1; r <= rounds; r++) {
     const start          = (r - 1) * n + 1;
     const end            = r * n;
     const isCurrentRound = currentNum >= start && currentNum <= end;
+    const isExpanded     = state.mobileExpandedRounds.has(r);
     let   filled         = 0;
     for (let p = start; p <= end; p++) { if (pickMap[p]?.player_id) filled++; }
 
@@ -737,10 +750,10 @@ function renderMobileBoard() {
     header.innerHTML =
       `<span class="mobile-round-num">Round ${r}</span>` +
       `<span class="mobile-round-progress">${filled} / ${n}</span>` +
-      `<span class="mobile-round-chevron">${isCurrentRound ? '▲' : '▼'}</span>`;
+      `<span class="mobile-round-chevron">${isExpanded ? '▲' : '▼'}</span>`;
 
     const body = document.createElement('div');
-    body.className = 'mobile-round-body' + (isCurrentRound ? '' : ' hidden');
+    body.className = 'mobile-round-body' + (isExpanded ? '' : ' hidden');
 
     for (let p = start; p <= end; p++) {
       const pick      = pickMap[p];
@@ -770,6 +783,11 @@ function renderMobileBoard() {
     }
 
     header.addEventListener('click', () => {
+      if (state.mobileExpandedRounds.has(r)) {
+        state.mobileExpandedRounds.delete(r);
+      } else {
+        state.mobileExpandedRounds.add(r);
+      }
       body.classList.toggle('hidden');
       header.querySelector('.mobile-round-chevron').textContent =
         body.classList.contains('hidden') ? '▼' : '▲';
