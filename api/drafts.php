@@ -570,6 +570,12 @@ try {
             "UPDATE drafts SET current_pick_num=?, status=?, completed_at=IF(?='completed',completed_at,NULL), timer_end=NULL, timer_remaining_seconds=NULL WHERE id=?"
         )->execute([$lastPick['pick_num'], $newStatus, $draft['status'], $draft['id']]);
 
+        if ($newStatus === 'active') {
+            $draft['status']           = 'active';
+            $draft['current_pick_num'] = $lastPick['pick_num'];
+            advanceTimer($db, $draft);
+        }
+
         jsonResponse(fullState($db));
 
     } elseif ($action === 'clear_pick') {
