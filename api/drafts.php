@@ -34,7 +34,15 @@ try {
         $stmt = $db->prepare('SELECT * FROM teams WHERE draft_id=? ORDER BY draft_order ASC');
         $stmt->execute([$draftId]);
         return array_map(
-            fn($r) => array_merge(array_diff_key($r, ['pin' => 1]), ['has_pin' => !empty($r['pin'])]),
+            fn($r) => array_merge(
+                array_diff_key($r, ['pin' => 1, 'login_token' => 1]),
+                [
+                    'has_pin'          => !empty($r['pin']),
+                    'token_expires_at' => $r['token_expires_at']
+                        ? str_replace(' ', 'T', $r['token_expires_at']) . 'Z'
+                        : null,
+                ]
+            ),
             $stmt->fetchAll()
         );
     }
@@ -92,12 +100,12 @@ try {
         $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
         $totalStmt->execute([$draftId]);
         $total = (int)$totalStmt->fetchColumn();
-        $stmt  = $db->prepare('SELECT player_id FROM picks WHERE draft_id=? AND pick_num=?');
+        $stmt  = $db->prepare('SELECT player_id, skipped FROM picks WHERE draft_id=? AND pick_num=?');
         $next  = $afterPickNum + 1;
         while ($next <= $total) {
             $stmt->execute([$draftId, $next]);
             $row = $stmt->fetch();
-            if ($row && $row['player_id'] === null) break;
+            if ($row && $row['player_id'] === null && !$row['skipped']) break;
             $next++;
         }
         return $next;
@@ -110,6 +118,7 @@ try {
         if ($draft) {
             $stmt = $db->prepare(
                 'SELECT pk.*, p.name AS player_name, p.rank AS player_rank, p.position AS player_position,
+                        p.age AS player_age, p.is_pitcher AS player_is_pitcher, p.is_catcher AS player_is_catcher,
                         t.name AS team_name
                  FROM picks pk
                  LEFT JOIN players p ON pk.player_id = p.id
@@ -131,11 +140,20 @@ try {
 
         if ($role === 'admin') {
             $allDrafts = array_map(
-                fn($d) => array_merge(array_diff_key($d, ['coach_pin' => 1]), ['has_coach_pin' => !empty($d['coach_pin'])]),
+                fn($d) => array_merge(
+                    array_diff_key($d, ['coach_pin' => 1, 'coach_login_token' => 1]),
+                    [
+                        'has_coach_pin'          => !empty($d['coach_pin']),
+                        'coach_token_expires_at' => $d['coach_token_expires_at']
+                            ? str_replace(' ', 'T', $d['coach_token_expires_at']) . 'Z'
+                            : null,
+                    ]
+                ),
                 $db->query(
                     'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
-                            coach_name, coach_pin, coach_mode, created_at, started_at, completed_at
-                     FROM drafts ORDER BY created_at DESC'
+                            coach_name, coach_pin, coach_login_token, coach_token_expires_at,
+                            coach_mode, created_at, started_at, completed_at, archived
+                     FROM drafts WHERE archived = 0 ORDER BY created_at DESC'
                 )->fetchAll()
             );
         } elseif ($role === 'coach') {
@@ -155,6 +173,13 @@ try {
             $draft['timer_end'] = str_replace(' ', 'T', $draft['timer_end']) . 'Z';
         }
 
+        $archivedDrafts = null;
+        if ($role === 'admin') {
+            $archivedDrafts = $db->query(
+                'SELECT id, name, status, completed_at FROM drafts WHERE archived = 1 ORDER BY completed_at DESC'
+            )->fetchAll();
+        }
+
         return [
             'draft'            => $draft,
             'picks'            => $picks,
@@ -163,6 +188,7 @@ try {
             'role'             => $role,
             'team_id'          => ($role === 'team') ? ($_SESSION['team_id'] ?? null) : null,
             'allDrafts'        => $allDrafts,
+            'archivedDrafts'   => $archivedDrafts,
             'accessibleDrafts' => $accessibleDrafts,
             'selectedDraftId'  => $_SESSION['selected_draft_id'] ?? null,
             'serverTime'       => (new DateTime('now', new DateTimeZone('UTC')))->format('c'),
@@ -181,10 +207,33 @@ try {
             $db->query(
                 'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
                         coach_name, coach_pin, created_at, started_at, completed_at
-                 FROM drafts ORDER BY created_at DESC'
+                 FROM drafts WHERE archived = 0 ORDER BY created_at DESC'
             )->fetchAll()
         );
         jsonResponse($drafts);
+
+    } elseif ($action === 'list_archived') {
+        requireAdmin();
+        $drafts = $db->query(
+            'SELECT id, name, status, total_rounds, timer_minutes, completed_at, started_at
+             FROM drafts WHERE archived = 1 ORDER BY completed_at DESC'
+        )->fetchAll();
+        jsonResponse($drafts);
+
+    } elseif ($action === 'archive') {
+        requireAdmin();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft selected');
+        if ($draft['status'] !== 'completed') jsonError('Only completed drafts can be archived');
+        $db->prepare('UPDATE drafts SET archived = 1 WHERE id = ?')->execute([$draft['id']]);
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'unarchive') {
+        requireAdmin();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft selected');
+        $db->prepare('UPDATE drafts SET archived = 0 WHERE id = ?')->execute([$draft['id']]);
+        jsonResponse(fullState($db));
 
     } elseif ($action === 'create') {
         requireAdmin();
@@ -362,7 +411,7 @@ try {
         $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft selected');
         if ($draft['status'] === 'active') jsonError('Cannot reset picks while draft is active');
-        $db->prepare('UPDATE picks SET player_id=NULL, is_pre_assigned=0, is_auto_pick=0, picked_at=NULL WHERE draft_id=?')
+        $db->prepare('UPDATE picks SET player_id=NULL, is_pre_assigned=0, is_auto_pick=0, skipped=0, picked_at=NULL WHERE draft_id=?')
            ->execute([$draft['id']]);
         $db->prepare("UPDATE drafts SET status='setup', current_pick_num=1, started_at=NULL, completed_at=NULL, timer_end=NULL WHERE id=?")
            ->execute([$draft['id']]);
@@ -525,7 +574,7 @@ try {
         $isCurrentPick  = $draft['status'] === 'active' && $pickNum == $currentPickNum;
         $isPreAssigned  = $isFuture ? 1 : 0;
 
-        $db->prepare('UPDATE picks SET player_id=?, is_pre_assigned=?, is_auto_pick=0, picked_at=NOW() WHERE draft_id=? AND pick_num=?')
+        $db->prepare('UPDATE picks SET player_id=?, is_pre_assigned=?, is_auto_pick=0, skipped=0, picked_at=NOW() WHERE draft_id=? AND pick_num=?')
            ->execute([$playerId, $isPreAssigned, $draft['id'], $pickNum]);
 
         // If assigned to the current active pick, advance to next unfilled
@@ -545,6 +594,51 @@ try {
             }
         }
         jsonResponse(['success' => true]);
+
+    } elseif ($action === 'skip_pick') {
+        requireAdmin();
+        $draft = getContextDraft($db);
+        if (!$draft) jsonError('No draft found');
+        if ($draft['status'] !== 'active') jsonError('Draft is not active');
+        $pickNum = (int)$draft['current_pick_num'];
+        $db->prepare('UPDATE picks SET skipped=1 WHERE draft_id=? AND pick_num=?')
+           ->execute([$draft['id'], $pickNum]);
+        $totalStmt = $db->prepare('SELECT COUNT(*) FROM picks WHERE draft_id=?');
+        $totalStmt->execute([$draft['id']]);
+        $total = (int)$totalStmt->fetchColumn();
+        $next  = nextUnfilledPickNum($db, $draft['id'], $pickNum);
+        if ($next > $total) {
+            $db->prepare("UPDATE drafts SET status='completed', completed_at=NOW(), current_pick_num=?, timer_end=NULL WHERE id=?")
+               ->execute([$next, $draft['id']]);
+        } else {
+            $db->prepare('UPDATE drafts SET current_pick_num=? WHERE id=?')
+               ->execute([$next, $draft['id']]);
+            $draft['current_pick_num'] = $next;
+            advanceTimer($db, $draft);
+        }
+        jsonResponse(fullState($db));
+
+    } elseif ($action === 'toggle_skip') {
+        requireAdmin();
+        $data    = getInput();
+        $draft   = getContextDraft($db);
+        if (!$draft) jsonError('No draft found');
+        if ($draft['status'] === 'completed' || $draft['archived']) jsonError('Draft is finished');
+        $pickNum = (int)($data['pick_num'] ?? 0);
+        if (!$pickNum) jsonError('pick_num required');
+        // During active drafts, use skip_pick for the current slot — not toggle_skip
+        if ($draft['status'] === 'active' && $pickNum == $draft['current_pick_num']) {
+            jsonError('Use skip_pick to skip the current slot');
+        }
+        $pickStmt = $db->prepare('SELECT * FROM picks WHERE draft_id=? AND pick_num=?');
+        $pickStmt->execute([$draft['id'], $pickNum]);
+        $pick = $pickStmt->fetch();
+        if (!$pick) jsonError('Pick slot not found');
+        if ($pick['player_id']) jsonError('Cannot skip a slot that has a player assigned');
+        $newVal = $pick['skipped'] ? 0 : 1;
+        $db->prepare('UPDATE picks SET skipped=? WHERE draft_id=? AND pick_num=?')
+           ->execute([$newVal, $draft['id'], $pickNum]);
+        jsonResponse(fullState($db));
 
     } elseif ($action === 'undo_pick') {
         requireAdmin();

@@ -64,7 +64,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 .input-sm {
   background: #fff; border: 1px solid var(--border); color: var(--text);
-  padding: 5px 10px; border-radius: var(--radius); font-size: 13px;
+  padding: 3px 8px; border-radius: var(--radius); font-size: 12px;
 }
 .input-num { width: 60px; }
 .input-sm:focus { outline: none; border-color: var(--accent); }
@@ -125,7 +125,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* ── Admin Panel ──────────────────────────────────────────────────────────── */
 .admin-panel {
   background: var(--bg2); border-bottom: 2px solid var(--border);
-  padding: 10px 20px;
+  padding: 6px 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
 }
 .admin-sections { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
@@ -135,20 +135,10 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
   color: var(--text3); margin-bottom: 9px; font-weight: 700;
 }
-.admin-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 7px; }
+.admin-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .label-check, .filter-check { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; color: var(--text2); }
 .label-check input, .filter-check input { cursor: pointer; }
 
-/* Import tabs */
-.import-tabs { display: flex; margin-bottom: 8px; border-bottom: 2px solid var(--border); }
-.import-tab {
-  background: none; border: none; border-bottom: 2px solid transparent;
-  color: var(--text2); padding: 5px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
-  margin-bottom: -2px; transition: color .15s, border-color .15s;
-}
-.import-tab:hover  { color: var(--text); }
-.import-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.import-tab-panel  { padding-top: 4px; }
 
 .paste-textarea {
   width: 100%; min-height: 110px; resize: vertical;
@@ -233,7 +223,20 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   min-height: 0;
   border-right: 2px solid var(--border);
   background: var(--bg2);
+  transition: width .2s, min-width .2s;
+  overflow: hidden;
 }
+#rankings-panel.rankings-hidden {
+  width: 0; min-width: 0; border-right: none;
+}
+.btn-show-rankings {
+  position: absolute; top: 8px; left: 8px; z-index: 10;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px 7px;
+  font-size: 12px; cursor: pointer; color: var(--text2);
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+.btn-show-rankings:hover { background: var(--bg3); }
 #rankings-view {
   display: flex; flex-direction: column;
   flex: 1; min-height: 0;
@@ -275,6 +278,33 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 .player-rank { min-width: 28px; font-size: 12px; font-weight: 700; color: var(--text3); text-align: right; }
 .player-name { flex: 1; font-size: 13px; font-weight: 500; }
+.player-age     { font-size: 11px; font-weight: 600; color: var(--text3); background: var(--bg3); border-radius: 3px; padding: 1px 5px; }
+.player-pitcher { font-size: 11px; font-weight: 700; color: #1d4ed8; background: #dbeafe; border-radius: 3px; padding: 1px 5px; }
+.player-catcher { font-size: 11px; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 3px; padding: 1px 5px; }
+/* Hide number input spinners globally */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+
+.player-edit-btn, .player-delete-btn {
+  background: none; border: none; cursor: pointer; padding: 0 3px;
+  font-size: 13px; color: var(--text3); opacity: 0; transition: opacity .1s;
+  flex-shrink: 0;
+}
+.player-card:hover .player-edit-btn,
+.player-card:hover .player-delete-btn { opacity: 1; }
+.player-edit-btn:hover   { color: var(--accent); }
+.player-delete-btn:hover { color: var(--danger); }
+.player-edit-confirm, .player-edit-reject {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; padding: 2px 6px; font-size: 13px; font-weight: 700;
+  flex-shrink: 0; line-height: 1;
+}
+.player-edit-confirm { color: var(--accent2); }
+.player-edit-confirm:hover { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+.player-edit-reject  { color: var(--danger); }
+.player-edit-reject:hover  { background: var(--danger);  color: #fff; border-color: var(--danger); }
+.player-saved-flash { font-size: 12px; font-weight: 700; color: var(--accent2); margin-left: 4px; }
 .player-meta { display: flex; gap: 4px; align-items: center; }
 .player-pos  { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--bg3); color: var(--text2); }
 .player-ck   { font-size: 10px; color: var(--warn); font-weight: 700; }
@@ -305,7 +335,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* ── Board Panel ──────────────────────────────────────────────────────────── */
 #board-panel {
   flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--board-bg);
+  background: var(--board-bg); position: relative;
 }
 /* ── Draft Bar (unified selector + title + controls) ──────────────────────── */
 #draft-bar {
@@ -351,6 +381,9 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   overflow: hidden; text-overflow: ellipsis;
 }
 .current-pick-label { font-size: 13px; color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+#draft-status-badge-mobile { display: none; }
+.draft-bar-row1 { display: contents; } /* transparent wrapper on desktop — children behave as direct flex children */
 
 .draft-complete-banner {
   display: inline-flex; align-items: center;
@@ -554,6 +587,19 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 }
 .board-cell.is-preassigned .cell-clear-btn:hover { background: var(--danger); color: #fff; }
 
+/* Player age in board cell — top-right sub-square */
+.cell-player-age {
+  position: absolute;
+  top: 2px; right: 2px;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  color: var(--text3);
+  background: rgba(0,0,0,.1);
+  border-radius: 3px;
+  padding: 2px 3px;
+}
+.board-cell.is-filled .cell-player-age { color: rgba(20,83,45,.7); background: rgba(20,83,45,.15); }
+.board-cell.is-preassigned .cell-player-age { color: rgba(146,64,14,.7); background: rgba(146,64,14,.12); }
+
 /* Auto-pick badge — bottom of cell */
 .cell-auto {
   position: absolute;
@@ -582,6 +628,41 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   text-shadow: 0 1px 4px rgba(0,0,0,.35);
   display: block; margin-top: 2px;
 }
+
+/* Skipped slot */
+.board-cell.is-skipped {
+  background: #f1f3f5;
+  border: 2px dashed #adb5bd;
+  opacity: .65;
+}
+.board-cell.is-skipped .cell-pick-num { color: rgba(0,0,0,.3); }
+.cell-skip-label {
+  font-size: 9px; font-weight: 900; letter-spacing: .8px;
+  text-transform: uppercase; color: #868e96;
+  display: block; margin-top: 2px;
+}
+
+/* Skip / Unskip shared base */
+.cell-skip-btn, .cell-unskip-btn {
+  position: absolute;
+  top: 3px; right: 3px;
+  background: #fff;
+  border: 1.5px solid #adb5bd; border-radius: 4px;
+  color: #495057;
+  font-size: 11px; font-weight: 700;
+  cursor: pointer; padding: 3px 7px; line-height: 1;
+  z-index: 2; letter-spacing: .2px;
+  transition: background .12s, color .12s, border-color .12s;
+}
+
+/* Skip button — shown on hover only for all empty cells (including on-the-clock) */
+.cell-skip-btn { display: none; }
+.board-cell.is-pick-slot:hover .cell-skip-btn { display: block; }
+.cell-skip-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+/* Unskip button — always visible on skipped cells */
+.cell-unskip-btn { display: block; }
+.cell-unskip-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* ── Pick Announcement ────────────────────────────────────────────────────── */
 .announcement {
@@ -654,6 +735,10 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 /* Topbar role label */
 .topbar-role { font-size: 12px; color: rgba(255,255,255,.6); font-style: italic; }
 
+/* Mute button */
+.btn-mute { font-size: 16px; padding: 4px 8px; line-height: 1; }
+.btn-mute--muted { opacity: .5; }
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #rankings-panel { width: 200px; }
@@ -668,13 +753,16 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   .topbar-left  { gap: 8px; }
   .topbar-right { gap: 6px; }
   .logo { font-size: 16px; }
-  .topbar-role        { display: none; }  /* verbose on small screens */
+  .topbar-role        { font-size: 11px; }  /* slightly smaller on mobile */
   .font-size-controls { display: none; }  /* not useful on mobile */
   #topbar .btn  { padding: 5px 10px; font-size: 12px; }
   #draft-bar    { padding: 5px 10px; gap: 8px; min-height: 40px; }
   .draft-selector-select { min-width: 130px; font-size: 12px; }
   .draft-bar-name { font-size: 12px; }
   .current-pick-label { font-size: 12px; }
+  #draft-status-badge-mobile { display: inline-flex; }
+  .draft-bar-center { flex-direction: column; align-items: center; gap: 2px; }
+  .draft-bar-row1   { display: flex; align-items: center; gap: 8px; }
 }
 @media (max-width: 600px) {
   .admin-sections { flex-direction: column; }
@@ -794,6 +882,7 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .mobile-pick-player.is-hidden { color: rgba(255,255,255,.4); letter-spacing: 3px; }
 .mobile-pick-player.is-clock  { color: rgba(255,255,255,.8); font-style: italic; font-weight: 400; }
 .mobile-pick-player.is-empty  { color: var(--text3); font-weight: 400; }
+.mobile-pick-age { font-size: 10px; font-weight: 700; color: #14532d; background: rgba(20,83,45,.15); border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
 
 /* ── Draft Management ─────────────────────────────────────────────────────── */
 .admin-section-drafts { min-width: 420px; }
@@ -840,7 +929,10 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 
 
 /* ── Draft Content ────────────────────────────────────────────────────────── */
-.draft-content { }
+.draft-content {
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 0 14px 12px;
+}
 .draft-content.hidden { display: none; }
 
 /* ── Settings Rows ────────────────────────────────────────────────────────── */
@@ -857,68 +949,120 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 }
 .coach-draft-selector:focus { outline: none; border-color: var(--accent); }
 
-/* ── Teams setup-required state ──────────────────────────────────────────── */
-.setup-picks-warning {
-  background: #fff3cd; border: 1px solid #f59e0b; border-radius: var(--radius);
-  color: #92400e; font-size: 12px; font-weight: 600;
-  padding: 7px 12px; margin-bottom: 8px;
-}
-.setup-picks-warning.shake {
-  animation: warning-shake .4s ease;
-}
-@keyframes warning-shake {
-  0%, 100% { transform: translateX(0); }
-  20%       { transform: translateX(-6px); }
-  40%       { transform: translateX(6px); }
-  60%       { transform: translateX(-4px); }
-  80%       { transform: translateX(4px); }
-}
-
 @keyframes btn-pulse-urgent {
   0%, 100% { background: #d97706; box-shadow: 0 0 0 0 rgba(217,119,6,.5); }
   50%       { background: #f59e0b; box-shadow: 0 0 0 7px rgba(217,119,6,0); }
+}
+.btn-saved {
+  background: var(--accent2) !important; color: #fff !important;
 }
 .btn-needs-action {
   background: #d97706 !important; color: #fff !important;
   animation: btn-pulse-urgent .8s ease-in-out infinite;
 }
 
-.admin-tab.tab-locked {
-  opacity: .35; cursor: not-allowed;
-}
-.admin-tab.tab-locked:hover { color: var(--text2); }
-
-/* ── Admin Tabs ───────────────────────────────────────────────────────────── */
-.admin-tabs {
-  display: flex; gap: 0;
+/* ── Stepper Nav ──────────────────────────────────────────────────────────────── */
+.stepper-nav {
+  display: flex; align-items: center; gap: 0;
   border-bottom: 2px solid var(--border);
-  margin-bottom: 14px;
+  margin-bottom: 2px;
 }
-.admin-tab {
+.stepper-step {
+  display: inline-flex; align-items: center; gap: 5px;
   background: none; border: none; border-bottom: 3px solid transparent;
-  padding: 8px 18px; cursor: pointer;
-  font-size: 13px; font-weight: 600; color: var(--text2);
+  padding: 5px 12px; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--text2);
   margin-bottom: -2px; transition: color .15s, border-color .15s;
   white-space: nowrap;
 }
-.admin-tab:hover  { color: var(--text); }
-.admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.stepper-step:hover  { color: var(--text); }
+.stepper-step.active { color: var(--accent); border-bottom-color: var(--accent); }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: var(--bg3); border: 1.5px solid var(--border);
+  font-size: 10px; font-weight: 800; color: var(--text2); flex-shrink: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.stepper-step.active .step-num {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.step-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 9px; font-size: 10px; font-weight: 700;
+}
+.step-badge-count { background: var(--accent2); color: #fff; }
+.step-badge-done  { background: var(--accent2); color: #fff; }
+.step-badge-warn  { background: var(--warn);    color: #fff; }
+.stepper-connector {
+  width: 16px; height: 2px; background: var(--border);
+  flex-shrink: 0; margin-bottom: 2px;
+}
+.stepper-collapse {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 3px 9px; cursor: pointer;
+  font-size: 12px; color: var(--text2);
+  margin-left: auto; align-self: center;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.stepper-collapse:hover { background: var(--border); color: var(--text); }
+.stepper-panel         { padding: 0 0 4px; }
+.stepper-panel.hidden  { display: none; }
+.stepper-panel.panels-collapsed { display: none; }
 
-.admin-tab-panel { padding: 4px 0 8px; }
-.admin-tab-panel.hidden { display: none; }
+/* ── Pick Order Step ──────────────────────────────────────────────────────── */
+.pickorder-summary { font-size: 13px; color: var(--text2); margin-bottom: 4px; }
+.po-stat { font-weight: 600; color: var(--text); }
+.pickorder-notice {
+  background: #fff3cd; border: 1px solid #f59e0b;
+  border-radius: var(--radius); color: #92400e;
+  font-size: 12px; font-weight: 600; padding: 7px 12px; margin-bottom: 8px;
+}
+.pickorder-ready {
+  margin-top: 10px; font-size: 13px;
+  font-weight: 600; color: var(--accent2);
+}
+
+/* ── Quick-add toggle link ────────────────────────────────────────────────── */
+.btn-link-muted {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 12px; color: var(--text3);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.btn-link-muted:hover { color: var(--accent); }
+
+/* ── Danger Zone details ──────────────────────────────────────────────────── */
+.danger-zone-details {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.danger-zone-summary {
+  padding: 8px 14px; font-size: 12px; font-weight: 700;
+  color: var(--danger); cursor: pointer; user-select: none; list-style: none;
+}
+.danger-zone-summary::-webkit-details-marker { display: none; }
+.danger-zone-details[open] .danger-zone-summary { border-bottom: 1px solid var(--border); }
+.danger-zone-details .controls-group { padding: 8px 14px 12px; }
+
+/* Add-single-item row (team or player) */
+.add-single-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
 
 /* ── Tab field layout ─────────────────────────────────────────────────────── */
 .tab-field-row {
-  display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;
 }
 .tab-field-group {
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 2px;
 }
 .tab-label {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .6px; color: var(--text3);
 }
-.tab-divider { height: 1px; background: var(--border); margin: 12px 0; }
+.tab-divider { height: 1px; background: var(--border); margin: 6px 0 3px; }
 
 /* ── Controls groups ──────────────────────────────────────────────────────── */
 .controls-group { padding: 4px 0; }
@@ -938,9 +1082,6 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 }
 .login-type-btn.active { background: var(--th-bg); color: #fff; }
 
-/* ── Bulk team rows ───────────────────────────────────────────────────────── */
-.bulk-team-row { display: flex; gap: 6px; margin-bottom: 6px; }
-.bulk-team-row .input-sm { flex: 1; }
 
 /* ── PICK pill (team role) ────────────────────────────────────────────────── */
 .btn-pick-pill {
@@ -965,3 +1106,30 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 20px;
 }
 .pick-confirm-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* Login token status badges */
+.token-status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.token-status--none    { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
+.token-status--valid   { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.token-status--expired { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+/* Expired token notice on login form */
+.token-expired-notice {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  text-align: center;
+}

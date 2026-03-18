@@ -18,6 +18,7 @@ const state = {
   teamId:           null,
   leagueName:       '',
   allDrafts:        [],
+  archivedDrafts:   [],
   accessibleDrafts: [],
   selectedDraftId:  null,
   serverOffset:     0,
@@ -34,7 +35,31 @@ const state = {
   mobileCurrentRound:       0,
   lastManualPickNum:        null,
   csrfToken:                null,
+  audioEnabled:             false,
 };
+state.audioEnabled = false; // always start muted — audio requires a user gesture to unlock
+
+// ── Token helpers ─────────────────────────────────────────────────────────────
+function tokenStatusHtml(expiresAt) {
+  if (!expiresAt) return '<span class="token-status token-status--none">No link</span>';
+  const exp = new Date(expiresAt), now = new Date();
+  if (exp > now) {
+    const minsLeft = Math.round((exp - now) / 60000);
+    const label    = minsLeft < 60 ? `${minsLeft}m` : `${Math.floor(minsLeft/60)}h ${minsLeft%60}m`;
+    return `<span class="token-status token-status--valid">Valid (${label})</span>`;
+  }
+  const minsAgo = Math.round((now - exp) / 60000);
+  const label   = minsAgo < 60 ? `${minsAgo}m ago` : `${Math.round(minsAgo/60)}h ago`;
+  return `<span class="token-status token-status--expired">Expired ${label}</span>`;
+}
+
+async function generateAndCopyToken(type, id) {
+  const payload = type === 'coach' ? { type: 'coach', draft_id: id } : { type: 'team', team_id: id };
+  const data = await api(API.auth, 'generate_token', payload);
+  const url  = `${location.origin}${location.pathname}?token=${data.token}`;
+  await navigator.clipboard.writeText(url);
+  return data;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function checkAuth() {
@@ -107,7 +132,7 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
   if (state.teamsNeedSetup && !confirm('You have unsaved pick order changes. Sign out anyway?')) {
-    switchAdminTab('teams');
+    switchAdminStep('pickorder');
     return;
   }
   await api(API.auth, 'logout', {});
@@ -181,7 +206,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function applyState(data) {
-  const prevStatus = state.draft?.status;
+  const prevStatus  = state.draft?.status;
+  const prevPickNum = state.draft?.current_pick_num;
 
   // Detect newly filled picks via polling — runs for all roles
   {
@@ -218,8 +244,47 @@ function applyState(data) {
     if (teamName) document.getElementById('topbar-role').textContent = `(${teamName})`;
   }
   if (data.allDrafts)        state.allDrafts        = data.allDrafts;
+  if (data.archivedDrafts)   state.archivedDrafts   = data.archivedDrafts;
   if (data.accessibleDrafts) state.accessibleDrafts = data.accessibleDrafts;
   if (data.selectedDraftId !== undefined) state.selectedDraftId = data.selectedDraftId;
+
+  // ── Audio announcements ──────────────────────────────────────────────────
+  const newPickNum = state.draft?.current_pick_num;
+
+  if (state.draft?.status === 'active' && newPickNum !== prevPickNum) {
+    // Reset timer tracking so threshold announcements don't false-fire on the new pick's timer
+    state.timerSeconds = null;
+
+    const donePick = state.picks.find(p => p.pick_num == prevPickNum);
+    const nextPick = state.picks.find(p => p.pick_num == newPickNum);
+
+    let msg = '';
+    if (donePick?.player_name) {
+      msg += `${donePick.team_name} picked ${donePick.player_name}. `;
+    }
+    if (nextPick) {
+      const mins = state.draft.timer_minutes;
+      if (state.draft.auto_pick_enabled && mins) {
+        msg += `${nextPick.team_name} now has ${mins} minute${mins !== 1 ? 's' : ''} on the clock.`;
+      } else {
+        msg += `${nextPick.team_name} is now on the clock.`;
+      }
+    }
+    if (msg) speak(msg);
+  }
+
+  // Draft just went active (start event)
+  if (prevStatus !== 'active' && state.draft?.status === 'active') {
+    const firstPick = state.picks.find(p => p.pick_num == state.draft.current_pick_num);
+    if (firstPick) {
+      const mins = state.draft.timer_minutes;
+      const tmsg = (state.draft.auto_pick_enabled && mins)
+        ? `${firstPick.team_name} has ${mins} minute${mins !== 1 ? 's' : ''} on the clock.`
+        : `${firstPick.team_name} is on the clock.`;
+      speak(`The draft has started. ${tmsg}`);
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   if (state.draft) state.timerMax = state.draft.timer_minutes * 60;
 
@@ -239,23 +304,9 @@ function applyState(data) {
   renderTeamList();
   renderReorderList();
   updateControls();
+  updateStepBadges();
   updateStatusBadge();
   updateCurrentPickLabel();
-
-  // Total draft time label (admin only, always visible when draft is loaded)
-  const totalEl = document.getElementById('timer-total');
-  if (totalEl) {
-    if (state.role === 'admin' && state.picks?.length && state.draft?.timer_minutes) {
-      const remaining = state.picks.filter(p => !p.player_id).length;
-      const totalMins = remaining * state.draft.timer_minutes;
-      const h = Math.floor(totalMins / 60);
-      const m = totalMins % 60;
-      totalEl.textContent = h > 0 ? `(${h}h ${m}m)` : `(${m}m)`;
-      totalEl.classList.remove('hidden');
-    } else {
-      totalEl.classList.add('hidden');
-    }
-  }
 
   // Timer
   if (state.draft?.status === 'active') {
@@ -284,17 +335,37 @@ function applyState(data) {
 function renderAdminDraftSelector() {
   const sel = document.getElementById('draft-selector');
   if (!sel) return;
+  if (document.activeElement === sel) return; // don't clobber an open dropdown
 
-  const drafts = state.allDrafts || [];
+  const drafts   = state.allDrafts    || [];
+  const archived = state.archivedDrafts || [];
 
   sel.innerHTML = '<option value="">\u2014 Select a draft \u2014</option>';
+
+  const activeGroup = document.createElement('optgroup');
+  activeGroup.label = 'Active Drafts';
   drafts.forEach(d => {
     const opt = document.createElement('option');
     opt.value       = d.id;
     opt.textContent = `${d.name} (${d.status})`;
     if (d.id == state.selectedDraftId) opt.selected = true;
-    sel.appendChild(opt);
+    activeGroup.appendChild(opt);
   });
+  sel.appendChild(activeGroup);
+
+  if (archived.length > 0) {
+    const archGroup = document.createElement('optgroup');
+    archGroup.label = 'Archived';
+    archGroup.id    = 'archived-optgroup';
+    archived.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value       = d.id;
+      opt.textContent = `${d.name} (archived)`;
+      if (d.id == state.selectedDraftId) opt.selected = true;
+      archGroup.appendChild(opt);
+    });
+    sel.appendChild(archGroup);
+  }
 
   // Update badge and delete button
   const badge   = document.getElementById('draft-selector-badge');
@@ -302,11 +373,12 @@ function renderAdminDraftSelector() {
   const content = document.getElementById('draft-content');
 
   if (state.draft && state.selectedDraftId) {
-    badge.className = `badge badge-${state.draft.status}`;
-    badge.textContent = state.draft.status;
+    const isArchived = !!state.draft.archived;
+    badge.className = `badge badge-${isArchived ? 'archived' : state.draft.status}`;
+    badge.textContent = isArchived ? 'archived' : state.draft.status;
     badge.classList.remove('hidden');
-    delBtn.classList.toggle('hidden', state.draft.status === 'active');
-    if (content) content.classList.remove('hidden');
+    delBtn.classList.toggle('hidden', state.draft.status === 'active' || isArchived);
+    if (content) content.classList.toggle('hidden', isArchived);
   } else {
     badge.classList.add('hidden');
     delBtn.classList.add('hidden');
@@ -316,10 +388,8 @@ function renderAdminDraftSelector() {
 
 document.getElementById('draft-selector').addEventListener('change', async function() {
   if (state.teamsNeedSetup) {
-    // Revert the visual selection back; block navigation
     this.value = state.selectedDraftId || '';
-    shakeSetupWarning();
-    switchAdminTab('players');
+    switchAdminStep('pickorder');
     return;
   }
   const id = parseInt(this.value, 10);
@@ -346,6 +416,7 @@ function renderCoachDraftBar() {
   const bar = document.getElementById('coach-draft-bar');
   const sel = document.getElementById('coach-draft-selector');
   if (!bar || !sel) return;
+  if (document.activeElement === sel) return; // don't clobber an open dropdown
 
   const drafts = state.accessibleDrafts || [];
   if (drafts.length <= 1) {
@@ -377,8 +448,80 @@ document.getElementById('coach-draft-selector').addEventListener('change', async
   }
 });
 
+// ── Settings dirty-tracking ───────────────────────────────────────────────────
+let _settingsSaveTimer = null;
+let settingsDirty = false;
+
+function markSettingsDirty() {
+  settingsDirty = true;
+  const btn = document.getElementById('btn-save-settings');
+  if (!btn || btn.classList.contains('btn-saved')) return;
+  btn.disabled = false;
+  btn.classList.add('btn-primary');
+  btn.classList.remove('btn-secondary');
+  updateStepBadges();
+  updateControls();
+}
+
+function markSettingsClean() {
+  settingsDirty = false;
+  const btn = document.getElementById('btn-save-settings');
+  if (!btn) return;
+  clearTimeout(_settingsSaveTimer);
+  btn.textContent = '✓ Saved';
+  btn.classList.remove('btn-primary', 'btn-saved');
+  btn.classList.add('btn-secondary', 'btn-saved');
+  _settingsSaveTimer = setTimeout(() => {
+    btn.textContent = 'Save Settings';
+    btn.classList.remove('btn-saved');
+    btn.disabled = true;
+    updateStepBadges();
+  }, 2000);
+}
+
+const _settingsFields = ['setting-draft-name', 'setting-timer', 'setting-autopick',
+                          'setting-coach-name', 'setting-coach-pin'];
+_settingsFields.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', markSettingsDirty);
+  if (el) el.addEventListener('change', markSettingsDirty);
+});
+document.querySelectorAll('input[name="coach_mode"]').forEach(r =>
+  r.addEventListener('change', markSettingsDirty)
+);
+
+// Audio toggle — topbar mute button + settings checkbox stay in sync
+function setAudio(enabled) {
+  state.audioEnabled = enabled;
+  const btn = document.getElementById('btn-mute');
+  if (btn) {
+    btn.textContent = enabled ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+    btn.title       = enabled ? 'Mute audio announcements' : 'Unmute audio announcements';
+    btn.classList.toggle('btn-mute--muted', !enabled);
+  }
+  const chk = document.getElementById('chk-audio-announce');
+  if (chk) chk.checked = enabled;
+}
+
+setAudio(state.audioEnabled); // apply initial state to button
+
+document.getElementById('btn-mute').addEventListener('click', () => {
+  const enabling = !state.audioEnabled;
+  unlockAudio();
+  setAudio(enabling);
+  if (enabling) {
+    playPickSound(); // unlocks AudioContext within the gesture
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance('audio on'));
+    }
+  }
+});
+
+
 // ── Settings Form ─────────────────────────────────────────────────────────────
 function fillSettingsForm() {
+  if (settingsDirty) return; // don't overwrite user's unsaved changes during a poll
   const d = state.draft;
   const nameEl      = document.getElementById('setting-draft-name');
   const timerEl     = document.getElementById('setting-timer');
@@ -392,6 +535,12 @@ function fillSettingsForm() {
   if (modeRadio) modeRadio.checked = true;
   const sharedFields = document.getElementById('shared-coach-fields');
   if (sharedFields) sharedFields.style.display = mode === 'team' ? 'none' : '';
+  const linkRow = document.getElementById('coach-link-row');
+  if (linkRow) {
+    linkRow.style.display = mode === 'shared' ? 'flex' : 'none';
+    document.getElementById('coach-link-status').innerHTML =
+      tokenStatusHtml(state.allDrafts?.find(d => d.id === state.draft?.id)?.coach_token_expires_at ?? null);
+  }
 
   if (d) {
     nameEl.value      = d.name          || '';
@@ -403,6 +552,16 @@ function fillSettingsForm() {
   } else {
     nameEl.value = ''; timerEl.value = 2;
     autoEl.checked = true; coachNameEl.value = ''; coachPinEl.value = '';
+  }
+
+  // Reset button to neutral disabled state (form is now in sync with saved state)
+  if (!settingsDirty) {
+    const saveBtn = document.getElementById('btn-save-settings');
+    if (saveBtn && !saveBtn.classList.contains('btn-saved')) {
+      saveBtn.disabled = true;
+      saveBtn.classList.remove('btn-primary');
+      saveBtn.classList.add('btn-secondary');
+    }
   }
 }
 
@@ -426,7 +585,7 @@ document.getElementById('btn-confirm-new-draft').addEventListener('click', async
     document.getElementById('new-draft-inline').classList.add('hidden');
     document.getElementById('btn-new-draft').classList.remove('hidden');
     applyState(data);
-    switchAdminTab('settings');
+    switchAdminStep('settings');
   } catch (e) {
     alert('Error: ' + e.message);
   }
@@ -454,6 +613,8 @@ document.querySelectorAll('input[name="coach_mode"]').forEach(r =>
   r.addEventListener('change', () => {
     const sharedFields = document.getElementById('shared-coach-fields');
     if (sharedFields) sharedFields.style.display = r.value === 'team' ? 'none' : '';
+    const linkRow = document.getElementById('coach-link-row');
+    if (linkRow) linkRow.style.display = r.value === 'shared' ? 'flex' : 'none';
   })
 );
 
@@ -472,9 +633,26 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
   };
   try {
     const data = await api(API.drafts, 'update_settings', payload);
+    markSettingsClean();
     applyState(data);
   } catch (e) {
     alert('Error: ' + e.message);
+  }
+});
+
+document.getElementById('btn-gen-coach-link')?.addEventListener('click', async function () {
+  if (!state.draft) return;
+  this.disabled = true;
+  try {
+    const data = await generateAndCopyToken('coach', state.draft.id);
+    const d = state.allDrafts?.find(x => x.id === state.draft.id);
+    if (d) d.coach_token_expires_at = data.expires_at;
+    document.getElementById('coach-link-status').innerHTML = tokenStatusHtml(data.expires_at);
+    this.textContent = 'Copied!';
+    setTimeout(() => { this.textContent = 'Generate & Copy Link'; this.disabled = false; }, 2000);
+  } catch(e) {
+    alert('Error: ' + e.message);
+    this.disabled = false;
   }
 });
 
@@ -491,9 +669,6 @@ document.getElementById('btn-setup-picks').addEventListener('click', async () =>
   }
 });
 
-document.getElementById('btn-setup-picks-cancel').addEventListener('click', () => {
-  setTeamsNeedSetup(false);
-});
 
 // ── Timer ─────────────────────────────────────────────────────────────────────
 function startTimer() {
@@ -509,41 +684,63 @@ function tickTimer() {
   const serverNow = Date.now() - state.serverOffset;
   const remainMs  = new Date(state.draft.timer_end).getTime() - serverNow;
   const remainSec = Math.max(0, Math.ceil(remainMs / 1000));
+  const prevSeconds = state.timerSeconds;
   state.timerSeconds = remainSec;
   updateTimerDisplay(remainSec);
+  announceTimerIfNeeded(prevSeconds, remainSec);
   if (remainMs <= 0) { stopTimer(); triggerAutoPick(); }
 }
 
-function updateTimerDisplay(seconds) {
-  const hasTimer = !!(state.draft?.auto_pick_enabled && state.draft?.timer_end);
+function announceTimerIfNeeded(prevSec, nowSec) {
+  if (!state.audioEnabled || prevSec === null || prevSec === nowSec) return;
+  const pick = state.picks?.find(p => p.pick_num == state.draft?.current_pick_num);
+  if (!pick) return;
+  const team = pick.team_name;
+  for (const m of [5, 4, 3, 2, 1]) {
+    if (prevSec > m * 60 && nowSec <= m * 60) {
+      speak(`${team} has ${m} minute${m !== 1 ? 's' : ''} on the clock.`);
+      return;
+    }
+  }
+  if (prevSec > 30 && nowSec <= 30) {
+    speak(`${team} has 30 seconds on the clock.`);
+  }
+}
 
-  // Topbar countdown text (bar hidden via CSS)
+function updateTimerDisplay(seconds) {
+  const draftActive   = state.draft?.status === 'active';
+  const autoPickOn    = !!(state.draft?.auto_pick_enabled);
+  const hasTimer      = draftActive && autoPickOn;
+  const hasCountdown  = hasTimer && seconds !== null;
+
+  const fmtTime = s => {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  // Topbar countdown
   const display   = document.getElementById('timer-display');
   const countdown = document.getElementById('timer-countdown');
   if (display && countdown) {
-    if (hasTimer && seconds !== null) {
+    if (hasTimer) {
       display.classList.remove('hidden');
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      countdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
       countdown.className = 'timer-countdown';
-      if (seconds <= 30) countdown.classList.add('warn');
-      if (seconds <= 10) { countdown.classList.remove('warn'); countdown.classList.add('urgent'); }
+      if (hasCountdown) {
+        countdown.textContent = fmtTime(seconds);
+        if (seconds <= 30) countdown.classList.add('warn');
+        if (seconds <= 10) { countdown.classList.remove('warn'); countdown.classList.add('urgent'); }
+      } else {
+        countdown.textContent = `${state.draft.timer_minutes}:00`;
+      }
     } else {
       display.classList.add('hidden');
     }
   }
 
-  // Cell countdown text
+  // Cell countdown
   const ctdwn = document.getElementById('cell-timer-countdown');
   if (ctdwn) {
-    if (hasTimer && seconds !== null) {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      ctdwn.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-    } else {
-      ctdwn.textContent = '';
-    }
+    ctdwn.textContent = hasCountdown ? fmtTime(seconds) : '';
   }
 }
 
@@ -563,10 +760,17 @@ async function triggerAutoPick() {
 let audioCtx = null;
 
 function unlockAudio() {
-  if (audioCtx) return;
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Play a silent 1-sample buffer — required by iOS to fully unlock the context
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
   } catch (_) {}
 }
 // iOS Safari requires AudioContext creation inside a user gesture
@@ -574,12 +778,13 @@ document.addEventListener('touchstart', unlockAudio, { passive: true });
 document.addEventListener('click',      unlockAudio, { passive: true });
 
 function playPickSound(isComplete = false) {
+  if (!state.audioEnabled) return;
   // Haptic feedback — works on Android; iOS does not support navigator.vibrate
   if (navigator.vibrate) {
     navigator.vibrate(isComplete ? [100, 60, 100, 60, 200] : [100]);
   }
   // Synthesised chime via Web Audio API
-  if (!audioCtx) return; // not yet unlocked (iOS autoplay restriction)
+  if (!audioCtx) return;
   try {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     // Normal pick: two-note ding (E5 → G5)
@@ -600,6 +805,13 @@ function playPickSound(isComplete = false) {
       osc.stop(t + 0.5);
     });
   } catch (_) {}
+}
+
+function speak(text) {
+  if (!state.audioEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(utt);
 }
 
 // ── Announcement ──────────────────────────────────────────────────────────────
@@ -683,7 +895,25 @@ document.getElementById('btn-pick-cancel').addEventListener('click', () => {
   document.getElementById('pick-confirm-modal').classList.add('hidden');
 });
 
+function showDeleteConfirm(message, onConfirm) {
+  document.getElementById('delete-confirm-text').textContent = message;
+  document.getElementById('delete-confirm-modal').classList.remove('hidden');
+  const confirmBtn = document.getElementById('btn-delete-confirm');
+  const handler = () => {
+    confirmBtn.removeEventListener('click', handler);
+    document.getElementById('delete-confirm-modal').classList.add('hidden');
+    onConfirm();
+  };
+  confirmBtn.addEventListener('click', handler);
+}
+document.getElementById('btn-delete-cancel').addEventListener('click', () => {
+  document.getElementById('delete-confirm-modal').classList.add('hidden');
+});
+
+let closeCurrentPlayerEdit = null;
+
 function renderRankings() {
+  if (closeCurrentPlayerEdit) return; // don't clobber an active inline edit
   const list        = document.getElementById('rankings-list');
   const search      = document.getElementById('filter-search').value.trim().toLowerCase();
   const filterAvail = document.getElementById('filter-available').checked;
@@ -735,16 +965,83 @@ function renderRankings() {
       card.className = 'player-card';
     }
 
-    card.innerHTML = `<span class="player-rank">#${p.rank}</span><span class="player-name">${esc(p.name)}</span>`;
+    const renderCardDisplay = () => {
+      if (closeCurrentPlayerEdit === renderCardDisplay) closeCurrentPlayerEdit = null;
+      card.innerHTML = `<span class="player-rank">#${p.rank}</span><span class="player-name">${esc(p.name)}</span>${p.age ? `<span class="player-age">${p.age}</span>` : ''}`;
 
-    if (drafted && pickInfo) {
-      const badge = document.createElement('span');
-      badge.className = 'player-team-badge' + (isMyPick ? ' is-my-team' : '');
-      badge.textContent = isMyPick ? '✓' : esc(pickInfo.teamName);
-      card.appendChild(badge);
-    }
+      if (drafted && pickInfo) {
+        const badge = document.createElement('span');
+        badge.className = 'player-team-badge' + (isMyPick ? ' is-my-team' : '');
+        badge.textContent = isMyPick ? '✓' : esc(pickInfo.teamName);
+        card.appendChild(badge);
+      }
 
-    if (!drafted && state.role === 'admin') {
+      if (!drafted && state.role === 'admin' && !state.draft?.archived) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'player-edit-btn';
+        editBtn.title = 'Edit';
+        editBtn.innerHTML = '&#9998;';
+        editBtn.addEventListener('click', e => { e.stopPropagation(); renderCardEdit(); });
+        card.appendChild(editBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'player-delete-btn';
+        delBtn.title = 'Delete';
+        delBtn.innerHTML = '&#10005;';
+        delBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          showDeleteConfirm(`Delete "${p.name}"?`, async () => {
+            try {
+              await api(API.players, 'delete', { id: p.id });
+              await fetchState();
+              setTeamsNeedSetup(true);
+            } catch (err) { alert('Error: ' + err.message); }
+          });
+        });
+        card.appendChild(delBtn);
+      }
+    };
+
+    const renderCardEdit = () => {
+      if (closeCurrentPlayerEdit) closeCurrentPlayerEdit();
+      closeCurrentPlayerEdit = renderCardDisplay;
+
+      card.draggable = false;
+      card.innerHTML =
+        `<span class="player-rank">#${p.rank}</span>` +
+        `<input type="text"   class="player-edit-name input-sm" value="${esc(p.name)}" style="flex:1;min-width:80px">` +
+        `<input type="text" inputmode="numeric" maxlength="2" class="player-edit-age input-sm" value="${p.age ?? ''}" placeholder="Age" style="width:40px">` +
+        `<button class="player-edit-confirm" title="Save">&#10003;</button>` +
+        `<button class="player-edit-reject"  title="Cancel">&#10005;</button>`;
+
+      const nameIn = card.querySelector('.player-edit-name');
+      const ageIn  = card.querySelector('.player-edit-age');
+      nameIn.focus();
+      nameIn.select();
+
+      const doSave = async () => {
+        const name = nameIn.value.trim();
+        if (!name) { nameIn.focus(); return; }
+        const newAge = ageIn.value.trim() && /^\d+$/.test(ageIn.value.trim()) ? parseInt(ageIn.value, 10) : null;
+        try {
+          await api(API.players, 'update', { id: p.id, name, rank: p.rank, position: p.position ?? null, age: newAge, is_pitcher: p.is_pitcher ?? 0, is_catcher: p.is_catcher ?? 0 });
+          p.name = name; p.age = newAge;
+          const sp = state.players.find(x => x.id === p.id);
+          if (sp) { sp.name = name; sp.age = newAge; }
+          card.innerHTML = `<span class="player-rank">#${p.rank}</span><span class="player-name">${esc(p.name)}</span>${p.age ? `<span class="player-age">${p.age}</span>` : ''}<span class="player-saved-flash">&#10003;</span>`;
+          setTimeout(() => renderCardDisplay(), 1200);
+        } catch (e) { alert('Error: ' + e.message); renderCardDisplay(); }
+      };
+
+      card.querySelector('.player-edit-confirm').addEventListener('click', e => { e.stopPropagation(); doSave(); });
+      card.querySelector('.player-edit-reject').addEventListener('click',  e => { e.stopPropagation(); renderCardDisplay(); });
+      nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') renderCardDisplay(); });
+      ageIn.addEventListener('keydown',  e => { if (e.key === 'Enter') doSave(); if (e.key === 'Escape') renderCardDisplay(); });
+    };
+
+    renderCardDisplay();
+
+    if (!drafted && state.role === 'admin' && !state.draft?.archived) {
       card.draggable = true;
       card.addEventListener('dragstart', onPlayerDragStart);
       card.addEventListener('dragend',   onPlayerDragEnd);
@@ -897,7 +1194,8 @@ function renderMobileBoard() {
                                              + (isMyPick ? ' is-my-pick' : '');
         row.innerHTML =
           `<span class="mobile-player-rank">#${p.rank}</span>` +
-          `<span class="mobile-player-name">${esc(p.name)}</span>`;
+          `<span class="mobile-player-name">${esc(p.name)}</span>` +
+          `${p.age ? `<span class="player-age">${p.age}</span>` : ''}`;
 
         if (isDrafted && pickInfo) {
           const badge = document.createElement('span');
@@ -963,7 +1261,7 @@ function renderMobileBoard() {
 
       let playerCell = '';
       if (isFilled) {
-        playerCell = `<span class="mobile-pick-player">${esc(pick.player_name)}</span>`;
+        playerCell = `<span class="mobile-pick-player">${esc(pick.player_name)}</span>${pick.player_age ? `<span class="mobile-pick-age">${pick.player_age}</span>` : ''}`;
       } else if (isCurrent) {
         playerCell = `<span class="mobile-pick-player is-clock">selecting&hellip;</span>`;
       } else {
@@ -1012,6 +1310,7 @@ function isMobileNonAdmin() {
 
 // ── Board ─────────────────────────────────────────────────────────────────────
 function renderBoard() {
+  if (state.dragPlayerId !== null) return; // don't clobber an in-progress drag-to-board
   document.getElementById('rankings-panel').classList.toggle('hidden', isMobileNonAdmin());
   if (isMobileNonAdmin()) { renderMobileBoard(); return; }
   const wrap = document.getElementById('board-wrap');
@@ -1069,13 +1368,16 @@ function renderBoard() {
       const isCurrent     = pick.pick_num == state.draft.current_pick_num && state.draft.status === 'active';
       const isFilled      = !!pick.player_id;
       const isPreassigned = isFilled && Number(pick.is_pre_assigned);
+      const isSkipped     = !isFilled && Number(pick.skipped);
+      const isSetup       = state.draft.status === 'setup';
 
       if (isCurrent)     td.classList.add('is-current');
       if (isFilled)      td.classList.add('is-filled');
+      else if (isSkipped) td.classList.add('is-skipped');
       else               td.classList.add('is-pick-slot');
       if (isPreassigned) { td.classList.remove('is-filled'); td.classList.add('is-preassigned'); }
 
-      if (state.role === 'admin') {
+      if (state.role === 'admin' && !state.draft?.archived && !isFilled) {
         td.addEventListener('dragover',  onCellDragOver);
         td.addEventListener('dragleave', onCellDragLeave);
         td.addEventListener('drop', e => onCellDrop(e, pick));
@@ -1084,20 +1386,46 @@ function renderBoard() {
       if (isFilled) {
         td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
           <span class="cell-player">${pick.player_name.split(' ').map(w => `<span>${esc(w)}</span>`).join('')}</span>
-          ${Number(pick.is_auto_pick) ? '<span class="cell-auto">auto</span>' : ''}
-          ${state.role === 'admin' ? '<button class="cell-clear-btn" title="Remove pick">\u2715</button>' : ''}`;
-        if (state.role === 'admin') {
+          ${pick.player_age ? `<span class="cell-player-age">${pick.player_age}</span>` : ''}
+          ${state.role === 'admin' && !state.draft?.archived ? '<button class="cell-clear-btn" title="Remove pick">\u2715</button>' : ''}`;
+        if (state.role === 'admin' && !state.draft?.archived) {
           td.querySelector('.cell-clear-btn').addEventListener('click', e => {
             e.stopPropagation();
             clearPick(pick.pick_num);
           });
           td.addEventListener('contextmenu', e => { e.preventDefault(); clearPick(pick.pick_num); });
         }
+      } else if (isSkipped) {
+        td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>
+          <span class="cell-skip-label">SKIP</span>
+          ${state.role === 'admin' && !state.draft?.archived ? '<button class="cell-unskip-btn" title="Unskip this slot">&#8617;</button>' : ''}`;
+        if (state.role === 'admin' && !state.draft?.archived) {
+          td.querySelector('.cell-unskip-btn').addEventListener('click', e => {
+            e.stopPropagation();
+            toggleSkip(pick.pick_num);
+          });
+        }
       } else {
         if (isCurrent) td.id = 'clock-cell';
         td.innerHTML = `<span class="cell-pick-num">#${pick.pick_num}</span>` +
-          (isCurrent ? `<span class="cell-clock-label">ON THE CLOCK</span>` +
-                       `<span id="cell-timer-countdown" class="cell-timer-countdown"></span>` : '');
+          (isCurrent
+            ? `<span class="cell-clock-label">ON THE CLOCK</span>` +
+              `<span id="cell-timer-countdown" class="cell-timer-countdown"></span>` +
+              (state.role === 'admin' ? `<button class="cell-skip-btn" title="Skip this pick">Skip</button>` : '')
+            : (state.role === 'admin' && !state.draft?.archived
+                ? `<button class="cell-skip-btn" title="Skip this slot">Skip</button>`
+                : ''));
+        if (isCurrent && state.role === 'admin') {
+          td.querySelector('.cell-skip-btn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            skipPick();
+          });
+        } else if (state.role === 'admin' && !state.draft?.archived) {
+          td.querySelector('.cell-skip-btn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleSkip(pick.pick_num);
+          });
+        }
       }
       tr.appendChild(td);
     });
@@ -1150,6 +1478,21 @@ function clearPick(pickNum) {
   confirmBtn.addEventListener('click', handler);
 }
 
+async function skipPick() {
+  try {
+    const data = await api(API.drafts, 'skip_pick', {});
+    applyState(data);
+    if (state.draft?.status === 'active') { stopTimer(); startTimer(); }
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function toggleSkip(pickNum) {
+  try {
+    const data = await api(API.drafts, 'toggle_skip', { pick_num: pickNum });
+    applyState(data);
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
 // ── Drag and Drop ─────────────────────────────────────────────────────────────
 function onPlayerDragStart(e) {
   state.dragPlayerId = Number(e.currentTarget.dataset.playerId);
@@ -1192,6 +1535,7 @@ function onCellDrop(e, pick) {
 let reorderDragSrcIdx = null;
 
 function renderReorderList() {
+  if (reorderDragSrcIdx !== null) return; // don't clobber an in-progress reorder drag
   const list = document.getElementById('player-reorder-list-sidebar');
   if (!list) return;
   const players = [...state.players].sort((a, b) => a.rank - b.rank);
@@ -1235,6 +1579,7 @@ function showReorderStatus(msg, isError = false) {
 // ── Team Management ───────────────────────────────────────────────────────────
 function renderTeamList() {
   const list = document.getElementById('team-list');
+  if (list.contains(document.activeElement)) return; // don't clobber an active name/PIN edit
   if (state.teams.length === 0) { list.innerHTML = '<div class="empty-state" style="padding:8px">No teams yet.</div>'; return; }
   list.innerHTML = '';
   state.teams.forEach(t => {
@@ -1247,6 +1592,10 @@ function renderTeamList() {
         `<input type="text" class="team-name-input input-sm" value="${esc(t.name)}" title="Team name">` +
         `<input type="text" class="team-pin-input input-sm" placeholder="${t.has_pin ? '(PIN set — leave blank to keep)' : 'Set a PIN'}" title="Team login PIN">` +
         `<button class="team-pin-set btn btn-sm btn-secondary">Set</button>` +
+        (state.draft?.coach_mode === 'team'
+          ? tokenStatusHtml(t.token_expires_at)
+            + `<button class="btn-gen-team-link btn btn-sm btn-secondary" data-team-id="${t.id}">Link</button>`
+          : '') +
         `<button class="btn-delete" title="Remove">\u2715</button>`;
 
       const nameInput = item.querySelector('.team-name-input');
@@ -1290,6 +1639,24 @@ function renderTeamList() {
   });
 }
 
+
+document.getElementById('team-list').addEventListener('click', async e => {
+  const btn = e.target.closest('.btn-gen-team-link');
+  if (!btn) return;
+  const teamId = parseInt(btn.dataset.teamId, 10);
+  btn.disabled = true;
+  try {
+    const data = await generateAndCopyToken('team', teamId);
+    const team = state.teams?.find(t => t.id === teamId);
+    if (team) team.token_expires_at = data.expires_at;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { renderTeamList(); }, 2000);
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false;
+  }
+});
+
 async function deleteTeam(id) {
   try {
     await api(API.teams, 'delete', { id });
@@ -1298,52 +1665,46 @@ async function deleteTeam(id) {
   } catch (e) { alert('Error: ' + e.message); }
 }
 
-// ── Bulk Team Creation ─────────────────────────────────────────────────────────
-(function initBulkTeams() {
-  const sel = document.getElementById('team-count-select');
-  for (let i = 2; i <= 16; i++) {
-    const o = document.createElement('option');
-    o.value = i; o.textContent = i;
-    sel.appendChild(o);
-  }
-
-  sel.addEventListener('change', function() {
-    const n = parseInt(this.value) || 0;
-    const container = document.getElementById('bulk-team-rows');
-    container.innerHTML = '';
-    document.getElementById('bulk-team-footer').classList.toggle('hidden', !n);
-    for (let i = 0; i < n; i++) {
-      const row = document.createElement('div');
-      row.className = 'bulk-team-row';
-      row.innerHTML =
-        `<input type="text" class="bulk-team-name input-sm" placeholder="Team ${i + 1} Name">` +
-        `<input type="text" class="bulk-team-pin  input-sm" placeholder="PIN (optional)">`;
-      container.appendChild(row);
-    }
+// ── Quick-add multiple teams ───────────────────────────────────────────────────
+(function initQuickAddTeams() {
+  const toggleBtn = document.getElementById('btn-quick-add-toggle');
+  const panel     = document.getElementById('quick-add-teams');
+  const cancelBtn = document.getElementById('btn-quick-add-cancel');
+  const submitBtn = document.getElementById('btn-quick-add-submit');
+  const textarea  = document.getElementById('quick-add-names');
+  if (!toggleBtn) return;
+  toggleBtn.addEventListener('click', () => {
+    panel.classList.remove('hidden');
+    toggleBtn.classList.add('hidden');
+    textarea.focus();
   });
-
-  document.getElementById('btn-save-all-teams').addEventListener('click', async () => {
-    const teams = [...document.querySelectorAll('.bulk-team-row')].map(r => ({
-      name: r.querySelector('.bulk-team-name').value.trim(),
-      pin:  r.querySelector('.bulk-team-pin').value.trim(),
-    }));
-    if (teams.some(t => !t.name)) { alert('All team names are required.'); return; }
-    const clearExisting = document.getElementById('bulk-clear-existing').checked;
+  cancelBtn.addEventListener('click', () => {
+    panel.classList.add('hidden');
+    toggleBtn.classList.remove('hidden');
+    textarea.value = '';
+    document.getElementById('quick-add-clear').checked = false;
+  });
+  submitBtn.addEventListener('click', async () => {
+    const names = textarea.value.split('\n').map(n => n.trim()).filter(Boolean);
+    if (!names.length) { textarea.focus(); return; }
+    const teams = names.map(name => ({ name, pin: '' }));
+    const clearExisting = document.getElementById('quick-add-clear').checked;
     try {
       await api(API.teams, 'bulk_create', { teams, clear_existing: clearExisting });
-      document.getElementById('team-count-select').value = '';
-      document.getElementById('bulk-team-rows').innerHTML = '';
-      document.getElementById('bulk-team-footer').classList.add('hidden');
-      document.getElementById('bulk-clear-existing').checked = false;
+      textarea.value = '';
+      document.getElementById('quick-add-clear').checked = false;
+      panel.classList.add('hidden');
+      toggleBtn.classList.remove('hidden');
       await fetchState();
       setTeamsNeedSetup(true);
     } catch (e) { alert('Error: ' + e.message); }
   });
-})();
+}());
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 function updateControls() {
   const status        = state.draft?.status || 'none';
+  const isArchived    = !!state.draft?.archived;
   const btnStart      = document.getElementById('btn-start');
   const btnRestart    = document.getElementById('btn-restart');
   const btnPause      = document.getElementById('btn-pause');
@@ -1352,29 +1713,60 @@ function updateControls() {
   const btnAutopick   = document.getElementById('btn-autopick-now');
   const btnUndo       = document.getElementById('btn-undo');
   const btnResetPicks = document.getElementById('btn-reset-picks');
+  const btnArchive    = document.getElementById('btn-archive');
+  const btnUnarchive  = document.getElementById('btn-unarchive');
   const bar           = document.getElementById('board-controls-bar');
 
   if (bar) bar.classList.toggle('hidden', !state.draft || state.role !== 'admin');
 
-  const isCompleted  = status === 'completed';
+  const isCompleted   = status === 'completed';
   const hasFilledPick = state.picks.some(p => p.player_id);
-  btnStart.classList.toggle('hidden', isCompleted);
-  btnStart.disabled  = !(status === 'setup');
-  btnRestart.classList.toggle('hidden', !isCompleted);
-  btnEnd.disabled    = !(status === 'active' || status === 'paused');
-  btnPause.classList.toggle('hidden',    status !== 'active');
-  btnResume.classList.toggle('hidden',   status !== 'paused');
-  btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
-  btnUndo.classList.toggle('hidden', !(hasFilledPick && (status === 'active' || status === 'paused' || status === 'completed')));
+
+  if (isArchived) {
+    // Read-only: hide all action buttons except Unarchive
+    btnStart.classList.add('hidden');
+    btnRestart.classList.add('hidden');
+    btnPause.classList.add('hidden');
+    btnResume.classList.add('hidden');
+    btnEnd.disabled = true;
+    btnAutopick.classList.add('hidden');
+    btnUndo.classList.add('hidden');
+    if (btnArchive)   btnArchive.classList.add('hidden');
+    if (btnUnarchive) btnUnarchive.classList.remove('hidden');
+  } else {
+    const setupIncomplete = settingsDirty
+      || !state.teams.length
+      || !state.players.length
+      || !state.picks?.length
+      || state.teamsNeedSetup;
+    btnStart.classList.toggle('hidden', isCompleted);
+    btnStart.disabled = !(status === 'setup') || setupIncomplete;
+    btnStart.title = (status === 'setup' && setupIncomplete)
+      ? (settingsDirty          ? 'Save settings first'
+        : !state.teams.length   ? 'Add teams first'
+        : !state.players.length ? 'Add players first'
+        : 'Build the pick order first')
+      : '';
+    btnRestart.classList.toggle('hidden', !isCompleted);
+    btnEnd.disabled    = !(status === 'active' || status === 'paused');
+    btnPause.classList.toggle('hidden',    status !== 'active');
+    btnResume.classList.toggle('hidden',   status !== 'paused');
+    btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
+    btnUndo.classList.toggle('hidden', !(hasFilledPick && (status === 'active' || status === 'paused' || status === 'completed')));
+    if (btnArchive)   btnArchive.classList.toggle('hidden', !(isCompleted));
+    if (btnUnarchive) btnUnarchive.classList.add('hidden');
+  }
+
   if (btnResetPicks) btnResetPicks.disabled = (status === 'active');
 }
 
 function updateStatusBadge() {
-  const badge  = document.getElementById('draft-status-badge');
-  const status = state.draft?.status || 'none';
-  badge.className   = 'badge badge-' + (status === 'none' ? 'setup' : status);
-  const labels = { none: 'No Draft', setup: 'Not Started' };
-  badge.textContent = labels[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
+  const status   = state.draft?.status || 'none';
+  const cls      = 'badge badge-' + (status === 'none' ? 'setup' : status);
+  const labels   = { none: 'No Draft', setup: 'Not Started' };
+  const text     = labels[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
+  const b = document.getElementById('draft-status-badge-mobile');
+  if (b) { b.className = cls; b.textContent = text; }
 }
 
 function updateCurrentPickLabel() {
@@ -1388,6 +1780,96 @@ function updateCurrentPickLabel() {
 document.getElementById('btn-admin').addEventListener('click', () => {
   document.getElementById('admin-panel').classList.toggle('hidden');
 });
+
+// ── Collapse stepper panels ───────────────────────────────────────────────────
+let adminTabsCollapsed = localStorage.getItem('ez_tabs_collapsed') === '1';
+
+function applyTabsCollapsed() {
+  document.querySelectorAll('.stepper-panel').forEach(p => {
+    p.classList.toggle('panels-collapsed', adminTabsCollapsed);
+  });
+  document.getElementById('btn-collapse-tabs').textContent = adminTabsCollapsed ? '▲' : '▼';
+}
+
+applyTabsCollapsed();
+
+document.getElementById('btn-collapse-tabs').addEventListener('click', () => {
+  adminTabsCollapsed = !adminTabsCollapsed;
+  localStorage.setItem('ez_tabs_collapsed', adminTabsCollapsed ? '1' : '0');
+  applyTabsCollapsed();
+});
+
+// ── Add single team ───────────────────────────────────────────────────────────
+document.getElementById('btn-add-team').addEventListener('click', async () => {
+  const nameInput = document.getElementById('add-team-name');
+  const pinInput  = document.getElementById('add-team-pin');
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.focus(); return; }
+  try {
+    await api(API.teams, 'create', { name, pin: pinInput.value.trim() });
+    nameInput.value = '';
+    pinInput.value  = '';
+    await fetchState();
+    setTeamsNeedSetup(true);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+document.getElementById('add-team-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-add-team').click();
+});
+
+// ── Add single player ─────────────────────────────────────────────────────────
+document.getElementById('btn-add-player').addEventListener('click', async () => {
+  const nameInput    = document.getElementById('add-player-name');
+  const ageInput     = document.getElementById('add-player-age');
+  const posInput     = document.getElementById('add-player-position');
+  const pitcherInput = document.getElementById('add-player-pitcher');
+  const catcherInput = document.getElementById('add-player-catcher');
+  const name = nameInput.value.trim();
+  if (!name) { nameInput.focus(); return; }
+  const nextRank = state.players.length > 0
+    ? Math.max(...state.players.map(p => p.rank)) + 1
+    : 1;
+  const ageVal = ageInput.value.trim();
+  try {
+    await api(API.players, 'create', {
+      name,
+      position:   posInput.value.trim() || null,
+      rank:       nextRank,
+      age:        ageVal ? parseInt(ageVal, 10) : null,
+      is_pitcher: pitcherInput.checked ? 1 : 0,
+      is_catcher: catcherInput.checked ? 1 : 0,
+    });
+    nameInput.value    = '';
+    ageInput.value     = '';
+    posInput.value     = '';
+    pitcherInput.checked = false;
+    catcherInput.checked = false;
+    await fetchState();
+    setTeamsNeedSetup(true);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+document.getElementById('add-player-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-add-player').click();
+});
+
+// ── Hide / show rankings panel ────────────────────────────────────────────────
+(function () {
+  const panel   = document.getElementById('rankings-panel');
+  const showBtn = document.getElementById('btn-show-rankings');
+  if (!panel || !showBtn) return;
+
+  function setRankingsVisible(visible) {
+    panel.classList.toggle('rankings-hidden', !visible);
+    showBtn.classList.toggle('hidden', visible);
+    localStorage.setItem('ez_rankings_hidden', visible ? '0' : '1');
+  }
+
+  // Restore saved state
+  if (localStorage.getItem('ez_rankings_hidden') === '1') setRankingsVisible(false);
+
+  document.getElementById('btn-hide-rankings').addEventListener('click', () => setRankingsVisible(false));
+  showBtn.addEventListener('click', () => setRankingsVisible(true));
+}());
 
 document.getElementById('btn-toggle-reorder').addEventListener('click', () => {
   document.getElementById('rankings-view').classList.add('hidden');
@@ -1463,85 +1945,158 @@ document.getElementById('btn-autopick-now').addEventListener('click', async () =
   } catch (e) { alert('Error: ' + e.message); }
 });
 
+document.getElementById('btn-archive').addEventListener('click', async () => {
+  if (!confirm('Archive this draft? It will be moved to the Archived section.')) return;
+  try {
+    const data = await api(API.drafts, 'archive', {});
+    applyState(data);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+document.getElementById('btn-unarchive').addEventListener('click', async () => {
+  try {
+    const data = await api(API.drafts, 'unarchive', {});
+    applyState(data);
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
 // ── Filters ───────────────────────────────────────────────────────────────────
 document.getElementById('filter-search').addEventListener('input', renderRankings);
 document.getElementById('filter-available').addEventListener('change', renderRankings);
 
-// ── Admin Tabs ────────────────────────────────────────────────────────────────
-function switchAdminTab(name) {
-  if (state.teamsNeedSetup && name !== 'teams' && name !== 'players') {
-    shakeSetupWarning();
-    return;
+// ── Admin Stepper ─────────────────────────────────────────────────────────────
+function switchAdminStep(name) {
+  if (adminTabsCollapsed) {
+    adminTabsCollapsed = false;
+    localStorage.setItem('ez_tabs_collapsed', '0');
+    applyTabsCollapsed();
   }
-  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.add('hidden'));
-  const tab = document.querySelector(`.admin-tab[data-tab="${name}"]`);
-  if (tab) tab.classList.add('active');
-  const panel = document.getElementById('admin-tab-' + name);
+  document.querySelectorAll('.stepper-step').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.stepper-panel').forEach(p => p.classList.add('hidden'));
+  const btn   = document.querySelector(`.stepper-step[data-step="${name}"]`);
+  const panel = document.getElementById('stepper-panel-' + name);
+  if (btn)   btn.classList.add('active');
   if (panel) panel.classList.remove('hidden');
 }
 
 function setTeamsNeedSetup(needed) {
   state.teamsNeedSetup = needed;
-  const btn     = document.getElementById('btn-setup-picks');
-  const cancel  = document.getElementById('btn-setup-picks-cancel');
-  const warning = document.getElementById('setup-picks-warning');
-  const tabs    = document.querySelectorAll('.admin-tab:not([data-tab="teams"])');
-  btn.classList.toggle('btn-needs-action', needed);
-  cancel.classList.toggle('hidden', !needed);
-  warning.classList.toggle('hidden', !needed);
-  tabs.forEach(t => t.classList.toggle('tab-locked', needed));
+  const noticeEl = document.getElementById('pickorder-needs-rebuild');
+  const setupBtn = document.getElementById('btn-setup-picks');
+  if (noticeEl) noticeEl.classList.toggle('hidden', !needed);
+  if (setupBtn) setupBtn.classList.toggle('btn-needs-action', needed);
+  updateStepBadges();
+  updateControls();
 }
 
-function shakeSetupWarning() {
-  const warning = document.getElementById('setup-picks-warning');
-  warning.classList.remove('shake');
-  // force reflow so animation restarts
-  void warning.offsetWidth;
-  warning.classList.add('shake');
+function updateStepBadges() {
+  if (!state.draft) return;
+
+  const settingsBadge = document.getElementById('step-badge-settings');
+  if (settingsBadge) {
+    settingsBadge.textContent = settingsDirty ? '!' : '✓';
+    settingsBadge.className   = 'step-badge' + (settingsDirty ? ' step-badge-warn' : ' step-badge-done');
+  }
+
+  const teamsBadge = document.getElementById('step-badge-teams');
+  if (teamsBadge) {
+    teamsBadge.textContent = state.teams.length || '';
+    teamsBadge.className   = 'step-badge' + (state.teams.length ? ' step-badge-count' : '');
+  }
+
+  const playersBadge = document.getElementById('step-badge-players');
+  if (playersBadge) {
+    playersBadge.textContent = state.players.length || '';
+    playersBadge.className   = 'step-badge' + (state.players.length ? ' step-badge-count' : '');
+  }
+
+  const pickBadge = document.getElementById('step-badge-pickorder');
+  if (pickBadge) {
+    if (!state.picks?.length) {
+      pickBadge.textContent = ''; pickBadge.className = 'step-badge';
+    } else if (state.teamsNeedSetup) {
+      pickBadge.textContent = '!'; pickBadge.className = 'step-badge step-badge-warn';
+    } else {
+      pickBadge.textContent = '✓'; pickBadge.className = 'step-badge step-badge-done';
+    }
+  }
+
+  updatePickOrderSummary();
 }
 
-document.querySelectorAll('.admin-tab').forEach(tab => {
-  tab.addEventListener('click', () => switchAdminTab(tab.dataset.tab));
-});
+function updatePickOrderSummary() {
+  const summaryEl = document.getElementById('pickorder-summary');
+  const readyEl   = document.getElementById('pickorder-ready');
+  if (!summaryEl || !readyEl) return;
+  const tc = state.teams.length, pc = state.players.length, picks = state.picks?.length ?? 0;
+  if (!tc || !pc) {
+    summaryEl.innerHTML = '<em>Add teams and players first.</em>';
+    readyEl.classList.add('hidden');
+    return;
+  }
+  const rounds = Math.round(picks / tc) || Math.round(pc / tc);
+  summaryEl.innerHTML =
+    `<span class="po-stat">${tc} team${tc !== 1 ? 's' : ''}</span> &middot; ` +
+    `<span class="po-stat">${pc} player${pc !== 1 ? 's' : ''}</span> &middot; ` +
+    `<span class="po-stat">~${rounds} round${rounds !== 1 ? 's' : ''}</span>`;
+  if (picks > 0 && !state.teamsNeedSetup) {
+    readyEl.textContent = `✓ Pick order ready — ${picks} picks across ${rounds} rounds`;
+    readyEl.classList.remove('hidden');
+  } else {
+    readyEl.classList.add('hidden');
+  }
+}
 
-// ── Import tabs ───────────────────────────────────────────────────────────────
-document.querySelectorAll('.import-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.import-tab-panel').forEach(p => p.classList.add('hidden'));
-    tab.classList.add('active');
-    document.getElementById('import-tab-' + tab.dataset.tab).classList.remove('hidden');
-  });
+document.querySelectorAll('.stepper-step').forEach(btn => {
+  btn.addEventListener('click', () => switchAdminStep(btn.dataset.step));
 });
 
 document.getElementById('btn-paste-import').addEventListener('click', async () => {
-  const textarea = document.getElementById('paste-names');
-  const result   = document.getElementById('import-result');
-  const names    = textarea.value.split('\n').map(n => n.trim()).filter(Boolean);
+  const textarea  = document.getElementById('paste-names');
+  const result    = document.getElementById('import-result');
+  const replaceEl = document.getElementById('paste-replace');
+  const names     = textarea.value.split('\n').map(n => n.trim()).filter(Boolean);
   if (!names.length) { result.textContent = 'Paste at least one name.'; result.className = 'import-result error'; return; }
-  try {
-    const data = await api(API.players, 'bulk_names', { names, replace: true });
-    result.textContent = `Imported ${data.imported} players.`; result.className = 'import-result';
-    textarea.value = '';
-    await fetchState();
-    setTeamsNeedSetup(true);
-  } catch (e) { result.textContent = 'Import failed: ' + e.message; result.className = 'import-result error'; }
+
+  const doImport = async (replace) => {
+    try {
+      const data = await api(API.players, 'bulk_names', { names, replace });
+      result.textContent = `Imported ${data.imported} player${data.imported !== 1 ? 's' : ''}.`;
+      result.className = 'import-result';
+      textarea.value = '';
+      replaceEl.checked = false;
+      await fetchState();
+      setTeamsNeedSetup(true);
+    } catch (e) { result.textContent = 'Import failed: ' + e.message; result.className = 'import-result error'; }
+  };
+
+  if (replaceEl.checked && state.players.length) {
+    showDeleteConfirm(
+      `Replace all ${state.players.length} existing player${state.players.length !== 1 ? 's' : ''} with the new list?`,
+      () => doImport(true)
+    );
+  } else {
+    doImport(false);
+  }
 });
 
-document.getElementById('btn-import').addEventListener('click', async () => {
-  const fileInput = document.getElementById('csv-file');
-  const result    = document.getElementById('import-result');
-  if (!fileInput.files.length) { result.textContent = 'Select a CSV file first.'; result.className = 'import-result error'; return; }
+document.getElementById('csv-file').addEventListener('change', async function() {
+  const result = document.getElementById('import-result');
+  if (!this.files.length) return;
   const form = new FormData();
-  form.append('csv', fileInput.files[0]);
+  form.append('csv', this.files[0]);
   try {
     const data = await apiForm(API.players, 'import', form);
-    result.textContent = `Imported ${data.imported} players.` + (data.errors.length ? ` Errors: ${data.errors.join('; ')}` : '');
-    result.className = 'import-result' + (data.errors.length ? ' error' : '');
+    result.textContent = `Imported ${data.imported} players.` +
+      (data.errors?.length ? ` Errors: ${data.errors.join('; ')}` : '');
+    result.className = 'import-result' + (data.errors?.length ? ' error' : '');
+    this.value = '';
     await fetchState();
     setTeamsNeedSetup(true);
-  } catch (e) { result.textContent = 'Import failed: ' + e.message; result.className = 'import-result error'; }
+  } catch (e) {
+    result.textContent = 'Import failed: ' + e.message;
+    result.className = 'import-result error';
+  }
 });
 
 document.getElementById('btn-clear-players').addEventListener('click', async () => {

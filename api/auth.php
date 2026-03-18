@@ -139,6 +139,36 @@ try {
         session_destroy();
         jsonResponse(['success' => true]);
 
+    } elseif ($action === 'generate_token') {
+        requireAdmin();
+        $data    = getInput();
+        $type    = $data['type'] ?? '';
+        $db      = getDB();
+        $token   = bin2hex(random_bytes(32));
+        $expires = (new DateTime('+4 hours', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+
+        if ($type === 'coach') {
+            $draftId = (int)($data['draft_id'] ?? 0);
+            $draft = $db->prepare("SELECT id, coach_mode FROM drafts WHERE id=? AND archived=0");
+            $draft->execute([$draftId]);
+            $d = $draft->fetch();
+            if (!$d) jsonError('Draft not found', 404);
+            if ($d['coach_mode'] !== 'shared') jsonError('Draft is not in shared coach mode');
+            $db->prepare("UPDATE drafts SET coach_login_token=?, coach_token_expires_at=? WHERE id=?")
+               ->execute([$token, $expires, $draftId]);
+        } elseif ($type === 'team') {
+            $teamId = (int)($data['team_id'] ?? 0);
+            $r = $db->prepare("SELECT id FROM teams WHERE id=?");
+            $r->execute([$teamId]);
+            if (!$r->fetch()) jsonError('Team not found', 404);
+            $db->prepare("UPDATE teams SET login_token=?, token_expires_at=? WHERE id=?")
+               ->execute([$token, $expires, $teamId]);
+        } else {
+            jsonError('type must be "coach" or "team"');
+        }
+
+        jsonResponse(['token' => $token, 'expires_at' => str_replace(' ', 'T', $expires) . 'Z']);
+
     } else {
         jsonError('Unknown action', 404);
     }

@@ -19,8 +19,8 @@ try {
         $data    = getInput();
         if (empty($data['name'])) jsonError('name is required');
         $stmt = $db->prepare(
-            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, is_pitcher, is_catcher, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $draftId,
@@ -29,6 +29,8 @@ try {
             $data['position'] ?? null,
             (int)($data['is_coaches_kid'] ?? 0),
             isset($data['age']) ? (int)$data['age'] : null,
+            (int)($data['is_pitcher'] ?? 0),
+            (int)($data['is_catcher'] ?? 0),
             $data['notes'] ?? null,
         ]);
         $id   = $db->lastInsertId();
@@ -41,13 +43,15 @@ try {
         $data = getInput();
         if (empty($data['id'])) jsonError('id is required');
         $db->prepare(
-            'UPDATE players SET name=?, `rank`=?, position=?, is_coaches_kid=?, age=?, notes=? WHERE id=?'
+            'UPDATE players SET name=?, `rank`=?, position=?, is_coaches_kid=?, age=?, is_pitcher=?, is_catcher=?, notes=? WHERE id=?'
         )->execute([
             $data['name'],
             (int)$data['rank'],
             $data['position'] ?? null,
             (int)($data['is_coaches_kid'] ?? 0),
             isset($data['age']) ? (int)$data['age'] : null,
+            (int)($data['is_pitcher'] ?? 0),
+            (int)($data['is_catcher'] ?? 0),
             $data['notes'] ?? null,
             (int)$data['id'],
         ]);
@@ -87,12 +91,24 @@ try {
         $maxStmt->execute([$draftId]);
         $maxRank = (int)$maxStmt->fetchColumn();
 
-        $stmt = $db->prepare('INSERT INTO players (draft_id, name, `rank`) VALUES (?, ?, ?)');
+        $stmt = $db->prepare('INSERT INTO players (draft_id, name, `rank`, age, is_pitcher, is_catcher) VALUES (?, ?, ?, ?, ?, ?)');
         $imported = 0;
-        foreach ($names as $name) {
-            $name = trim($name);
+        foreach ($names as $entry) {
+            $entry = trim($entry);
+            if ($entry === '') continue;
+            $parts     = array_map('trim', explode(',', $entry));
+            $name      = array_shift($parts);
             if ($name === '') continue;
-            $stmt->execute([$draftId, $name, $maxRank + $imported + 1]);
+            $age       = null;
+            $isPitcher = 0;
+            $isCatcher = 0;
+            foreach ($parts as $part) {
+                $up = strtoupper($part);
+                if ($up === 'P')           $isPitcher = 1;
+                elseif ($up === 'C')       $isCatcher = 1;
+                elseif (is_numeric($part)) $age = (int)$part;
+            }
+            $stmt->execute([$draftId, $name, $maxRank + $imported + 1, $age, $isPitcher, $isCatcher]);
             $imported++;
         }
         $db->commit();
@@ -117,7 +133,7 @@ try {
         $maxStmt->execute([$draftId]);
         $maxRank  = (int)$maxStmt->fetchColumn();
         $stmt     = $db->prepare(
-            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, notes) VALUES (?,?,?,?,?,?,?)'
+            'INSERT INTO players (draft_id, name, `rank`, position, is_coaches_kid, age, notes, is_pitcher, is_catcher) VALUES (?,?,?,?,?,?,?,?,?)'
         );
         $imported = 0; $errors = []; $row = 1;
 
@@ -135,12 +151,24 @@ try {
                 $v  = strtolower(trim($line[$col['coaches_kid']]));
                 $ck = in_array($v, ['1','yes','true','y'], true) ? 1 : 0;
             }
+            $isPitcher = 0;
+            if (isset($col['pitcher'])) {
+                $v = strtolower(trim($line[$col['pitcher']]));
+                $isPitcher = in_array($v, ['1','yes','true','y','p'], true) ? 1 : 0;
+            }
+            $isCatcher = 0;
+            if (isset($col['catcher'])) {
+                $v = strtolower(trim($line[$col['catcher']]));
+                $isCatcher = in_array($v, ['1','yes','true','y','c'], true) ? 1 : 0;
+            }
             $stmt->execute([
                 $draftId, $name, $rank,
                 isset($col['position']) ? (trim($line[$col['position']]) ?: null) : null,
                 $ck,
                 isset($col['age']) ? ((int)trim($line[$col['age']]) ?: null) : null,
                 isset($col['notes']) ? (trim($line[$col['notes']]) ?: null) : null,
+                $isPitcher,
+                $isCatcher,
             ]);
             $imported++;
         }
