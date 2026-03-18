@@ -101,16 +101,17 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   display: flex; align-items: center; gap: 10px;
 }
 .timer-countdown {
-  font-size: 26px; font-weight: 800; color: #fff;
+  font-size: clamp(26px, calc(var(--topbar-h) * 0.7), 42px); font-weight: 800; color: #fff;
   font-variant-numeric: tabular-nums; letter-spacing: 2px;
-  line-height: 1;
+  line-height: 1; max-height: calc(var(--topbar-h) - 10px); overflow: hidden;
 }
 .timer-countdown.warn   { color: #fde047; }
 .timer-countdown.urgent { color: #f87171; animation: pulse 1s ease-in-out infinite; }
 .timer-total { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: 0; margin-left: 6px; }
 .paused-display {
-  font-size: 18px; font-weight: 800; letter-spacing: 3px;
+  font-size: clamp(18px, calc(var(--topbar-h) * 0.55), 34px); font-weight: 800; letter-spacing: 3px;
   color: #fde047; animation: pulse 1.4s ease-in-out infinite;
+  line-height: 1; max-height: calc(var(--topbar-h) - 10px); overflow: hidden;
 }
 
 #timer-bar-wrap {
