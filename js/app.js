@@ -1773,10 +1773,7 @@ async function deleteTeam(id) {
 function updateControls() {
   const status        = state.draft?.status || 'none';
   const isArchived    = !!state.draft?.archived;
-  const btnStart      = document.getElementById('btn-start');
-  const btnRestart    = document.getElementById('btn-restart');
-  const btnPause      = document.getElementById('btn-pause');
-  const btnResume     = document.getElementById('btn-resume');
+  const btnPrimary    = document.getElementById('btn-primary');
   const btnEnd        = document.getElementById('btn-end');
   const btnAutopick   = document.getElementById('btn-autopick-now');
   const btnUndo       = document.getElementById('btn-undo');
@@ -1791,38 +1788,52 @@ function updateControls() {
   const hasFilledPick = state.picks.some(p => p.player_id);
 
   if (isArchived) {
-    // Read-only: hide all action buttons except Unarchive
-    btnStart.classList.add('hidden');
-    btnRestart.classList.add('hidden');
-    btnPause.classList.add('hidden');
-    btnResume.classList.add('hidden');
+    btnPrimary.classList.add('hidden');
     btnEnd.disabled = true;
     btnAutopick.classList.add('hidden');
     btnUndo.classList.add('hidden');
     if (btnArchive)   btnArchive.classList.add('hidden');
     if (btnUnarchive) btnUnarchive.classList.remove('hidden');
   } else {
-    const setupIncomplete = settingsDirty
-      || !state.teams.length
-      || !state.players.length
-      || !state.picks?.length
-      || state.teamsNeedSetup;
-    btnStart.classList.toggle('hidden', isCompleted);
-    btnStart.disabled = !(status === 'setup') || setupIncomplete;
-    btnStart.title = (status === 'setup' && setupIncomplete)
-      ? (settingsDirty          ? 'Save settings first'
-        : !state.teams.length   ? 'Add teams first'
-        : !state.players.length ? 'Add players first'
-        : 'Build the pick order first')
-      : '';
-    btnRestart.classList.toggle('hidden', !isCompleted);
-    btnEnd.disabled    = !(status === 'active' || status === 'paused');
-    btnPause.classList.toggle('hidden',    status !== 'active');
-    btnResume.classList.toggle('hidden',   status !== 'paused');
+    btnPrimary.classList.remove('hidden');
+    if (btnArchive)   btnArchive.classList.toggle('hidden', !isCompleted);
+    if (btnUnarchive) btnUnarchive.classList.add('hidden');
+
+    // Primary button morphs: Start → Pause → Resume → Restart
+    btnPrimary.className = 'btn btn-sm';
+    if (status === 'setup') {
+      const setupIncomplete = settingsDirty || !state.teams.length || !state.players.length || !state.picks?.length || state.teamsNeedSetup;
+      btnPrimary.textContent = '\u25B6 Start';
+      btnPrimary.classList.add('btn-success');
+      btnPrimary.disabled = setupIncomplete;
+      btnPrimary.title = setupIncomplete
+        ? (settingsDirty          ? 'Save settings first'
+          : !state.teams.length   ? 'Add teams first'
+          : !state.players.length ? 'Add players first'
+          : 'Build the pick order first')
+        : '';
+    } else if (status === 'active') {
+      btnPrimary.textContent = '\u23F8 Pause';
+      btnPrimary.classList.add('btn-warning');
+      btnPrimary.disabled = false;
+      btnPrimary.title = '';
+    } else if (status === 'paused') {
+      btnPrimary.textContent = '\u25B6 Resume';
+      btnPrimary.classList.add('btn-success');
+      btnPrimary.disabled = false;
+      btnPrimary.title = '';
+    } else if (status === 'completed') {
+      btnPrimary.textContent = '\u21BA Restart';
+      btnPrimary.classList.add('btn-success');
+      btnPrimary.disabled = false;
+      btnPrimary.title = '';
+    } else {
+      btnPrimary.disabled = true;
+    }
+
+    btnEnd.disabled = !(status === 'active' || status === 'paused');
     btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
     btnUndo.classList.toggle('hidden', !(hasFilledPick && (status === 'active' || status === 'paused' || status === 'completed')));
-    if (btnArchive)   btnArchive.classList.toggle('hidden', !(isCompleted));
-    if (btnUnarchive) btnUnarchive.classList.add('hidden');
   }
 
   if (btnResetPicks) btnResetPicks.disabled = (status === 'active');
@@ -1952,24 +1963,23 @@ document.getElementById('btn-close-reorder').addEventListener('click', () => {
 
 // (add-team button removed; teams are now created in bulk)
 
-document.getElementById('btn-start').addEventListener('click', async () => {
+document.getElementById('btn-primary').addEventListener('click', async () => {
+  const status = state.draft?.status;
   try {
-    await api(API.drafts, 'start', {});
-    state.timerMax = state.draft?.timer_minutes * 60 || 120;
-    await fetchState(); startPolling(); startTimer();
-  } catch (e) { alert('Error: ' + e.message); }
-});
-
-document.getElementById('btn-pause').addEventListener('click', async () => {
-  try { await api(API.drafts, 'pause', {}); stopTimer(); updateTimerDisplay(null); await fetchState(); }
-  catch (e) { alert('Error: ' + e.message); }
-});
-
-document.getElementById('btn-resume').addEventListener('click', async () => {
-  try {
-    const data = await api(API.drafts, 'resume', {});
-    applyState(data);
-    startTimer();
+    if (status === 'setup') {
+      await api(API.drafts, 'start', {});
+      state.timerMax = state.draft?.timer_minutes * 60 || 120;
+      await fetchState(); startPolling(); startTimer();
+    } else if (status === 'active') {
+      await api(API.drafts, 'pause', {}); stopTimer(); updateTimerDisplay(null); await fetchState();
+    } else if (status === 'paused') {
+      const data = await api(API.drafts, 'resume', {});
+      applyState(data); startTimer();
+    } else if (status === 'completed') {
+      if (!confirm('Restart draft from the first unfilled pick? Existing picks will be kept.')) return;
+      const data = await api(API.drafts, 'restart', {});
+      applyState(data); startPolling(); startTimer();
+    }
   } catch (e) { alert('Error: ' + e.message); }
 });
 
@@ -1977,16 +1987,6 @@ document.getElementById('btn-end').addEventListener('click', async () => {
   if (!confirm('End the draft?')) return;
   try { await api(API.drafts, 'end', {}); stopTimer(); stopPolling(); await fetchState(); }
   catch (e) { alert('Error: ' + e.message); }
-});
-
-document.getElementById('btn-restart').addEventListener('click', async () => {
-  if (!confirm('Restart draft from the first unfilled pick? Existing picks will be kept.')) return;
-  try {
-    const data = await api(API.drafts, 'restart', {});
-    applyState(data);
-    startPolling();
-    startTimer();
-  } catch (e) { alert('Error: ' + e.message); }
 });
 
 document.getElementById('btn-reset-picks').addEventListener('click', async () => {
