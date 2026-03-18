@@ -369,15 +369,21 @@ try {
         $draft = getContextDraft($db);
         if (!$draft) jsonError('No draft found');
         if ($draft['status'] !== 'paused') jsonError('Draft is not paused');
-        $timerEnd = null;
+        $draft['status'] = 'active';
         if ($draft['auto_pick_enabled'] && $draft['timer_remaining_seconds'] !== null) {
+            // Resume from where we left off
             $timerEnd = (new DateTime('now', new DateTimeZone('UTC')))
                 ->modify('+' . $draft['timer_remaining_seconds'] . ' seconds')
                 ->format('Y-m-d H:i:s');
+            $db->prepare("UPDATE drafts SET status='active', timer_end=?, timer_remaining_seconds=NULL WHERE id=?")
+               ->execute([$timerEnd, $draft['id']]);
+        } else {
+            // No recorded remaining time — clear paused state and give a fresh timer if auto-pick is on
+            $db->prepare("UPDATE drafts SET status='active', timer_remaining_seconds=NULL WHERE id=?")
+               ->execute([$draft['id']]);
+            advanceTimer($db, $draft);
         }
-        $db->prepare("UPDATE drafts SET status='active', timer_end=?, timer_remaining_seconds=NULL WHERE id=?")
-           ->execute([$timerEnd, $draft['id']]);
-        jsonResponse(['success' => true]);
+        jsonResponse(fullState($db));
 
     } elseif ($action === 'end') {
         requireAdmin();

@@ -1904,8 +1904,11 @@ document.getElementById('btn-pause').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-resume').addEventListener('click', async () => {
-  try { await api(API.drafts, 'resume', {}); await fetchState(); startTimer(); }
-  catch (e) { alert('Error: ' + e.message); }
+  try {
+    const data = await api(API.drafts, 'resume', {});
+    applyState(data);
+    startTimer();
+  } catch (e) { alert('Error: ' + e.message); }
 });
 
 document.getElementById('btn-end').addEventListener('click', async () => {
