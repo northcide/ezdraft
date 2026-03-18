@@ -132,6 +132,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
         <span id="timer-countdown" class="timer-countdown">2:00</span>
         <div id="timer-bar-wrap"><div id="timer-bar"></div></div>
       </div>
+      <div id="paused-display" class="paused-display hidden">&#9646;&#9646; PAUSED</div>
     </div>
     <div class="topbar-right">
       <span id="topbar-role" class="topbar-role"></span>

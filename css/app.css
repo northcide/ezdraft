@@ -108,6 +108,10 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .timer-countdown.warn   { color: #fde047; }
 .timer-countdown.urgent { color: #f87171; animation: pulse 1s ease-in-out infinite; }
 .timer-total { font-size: 14px; font-weight: 500; color: rgba(255,255,255,.6); letter-spacing: 0; margin-left: 6px; }
+.paused-display {
+  font-size: 18px; font-weight: 800; letter-spacing: 3px;
+  color: #fde047; animation: pulse 1.4s ease-in-out infinite;
+}
 
 #timer-bar-wrap {
   width: 100px; height: 6px; background: rgba(255,255,255,.2); border-radius: 3px;
@@ -627,6 +631,10 @@ input[type=number] { -moz-appearance: textfield; }
   font-size: 22px; font-weight: 900; color: #fff; line-height: 1;
   text-shadow: 0 1px 4px rgba(0,0,0,.35);
   display: block; margin-top: 2px;
+}
+.cell-timer-countdown.cell-timer-paused {
+  font-size: 13px; font-weight: 700; letter-spacing: 1px;
+  color: #fde047; text-shadow: none;
 }
 
 /* Skipped slot */

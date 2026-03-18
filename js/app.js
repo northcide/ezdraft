@@ -709,6 +709,7 @@ function announceTimerIfNeeded(prevSec, nowSec) {
 
 function updateTimerDisplay(seconds) {
   const draftActive   = state.draft?.status === 'active';
+  const draftPaused   = state.draft?.status === 'paused';
   const autoPickOn    = !!(state.draft?.auto_pick_enabled);
   const hasTimer      = draftActive && autoPickOn;
   const hasCountdown  = hasTimer && seconds !== null;
@@ -721,6 +722,7 @@ function updateTimerDisplay(seconds) {
   // Topbar countdown
   const display   = document.getElementById('timer-display');
   const countdown = document.getElementById('timer-countdown');
+  const pausedEl  = document.getElementById('paused-display');
   if (display && countdown) {
     if (hasTimer) {
       display.classList.remove('hidden');
@@ -736,11 +738,15 @@ function updateTimerDisplay(seconds) {
       display.classList.add('hidden');
     }
   }
+  if (pausedEl) {
+    pausedEl.classList.toggle('hidden', !draftPaused);
+  }
 
   // Cell countdown
   const ctdwn = document.getElementById('cell-timer-countdown');
   if (ctdwn) {
-    ctdwn.textContent = hasCountdown ? fmtTime(seconds) : '';
+    ctdwn.textContent = draftPaused ? 'PAUSED' : (hasCountdown ? fmtTime(seconds) : '');
+    ctdwn.classList.toggle('cell-timer-paused', draftPaused);
   }
 }
 
