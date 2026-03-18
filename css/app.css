@@ -769,6 +769,8 @@ input[type=number] { -moz-appearance: textfield; }
   .topbar-right { gap: 6px; }
   .logo { font-size: 16px; }
   .topbar-role        { font-size: 11px; }  /* slightly smaller on mobile */
+  .timer-countdown    { font-size: 20px; }
+  .paused-display     { font-size: 14px; letter-spacing: 2px; }
   .font-size-controls { display: none; }  /* not useful on mobile */
   #topbar .btn  { padding: 5px 10px; font-size: 12px; }
   #draft-bar    { padding: 5px 10px; gap: 8px; min-height: 40px; }
