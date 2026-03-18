@@ -142,6 +142,9 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .admin-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .label-check, .filter-check { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; color: var(--text2); }
 .label-check input, .filter-check input { cursor: pointer; }
+.label-check:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.label-check:has(input:disabled) input { cursor: not-allowed; }
+.setting-locked-note { font-size: 11px; color: var(--text3); font-style: italic; }
 
 
 .paste-textarea {

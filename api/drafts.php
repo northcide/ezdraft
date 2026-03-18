@@ -304,7 +304,10 @@ try {
             $coachPin = $draft['coach_pin'];
         }
         $coachMode = in_array($data['coach_mode'] ?? '', ['shared', 'team']) ? $data['coach_mode'] : ($draft['coach_mode'] ?? 'shared');
-        $draftType = in_array($data['draft_type'] ?? '', ['snake', 'straight']) ? $data['draft_type'] : ($draft['draft_type'] ?? 'snake');
+        // Draft type is locked once the draft has left setup (picks are already assigned)
+        $draftType = ($draft['status'] === 'setup' && in_array($data['draft_type'] ?? '', ['snake', 'straight']))
+            ? $data['draft_type']
+            : ($draft['draft_type'] ?? 'snake');
 
         $db->prepare('UPDATE drafts SET name=?, timer_minutes=?, auto_pick_enabled=?, coach_name=?, coach_pin=?, coach_mode=?, draft_type=? WHERE id=?')
            ->execute([$name, $timer, $auto, $coachName, $coachPin, $coachMode, $draftType, $draft['id']]);

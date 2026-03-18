@@ -254,6 +254,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
           <label class="label-check">
             <input type="radio" name="draft_type" value="straight"> Straight Draft
           </label>
+          <span id="draft-type-locked" class="setting-locked-note" style="display:none">&#128274; Locked after draft starts</span>
         </div>
         <div class="tab-divider"></div>
         <div class="admin-row" id="coach-mode-row">

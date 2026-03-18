@@ -536,6 +536,10 @@ function fillSettingsForm() {
   const draftType = d?.draft_type ?? 'snake';
   const typeRadio = document.querySelector(`input[name="draft_type"][value="${draftType}"]`);
   if (typeRadio) typeRadio.checked = true;
+  const typeLocked = d && d.status !== 'setup';
+  document.querySelectorAll('input[name="draft_type"]').forEach(r => { r.disabled = typeLocked; });
+  const typeLockedNote = document.getElementById('draft-type-locked');
+  if (typeLockedNote) typeLockedNote.style.display = typeLocked ? '' : 'none';
 
   const mode = d?.coach_mode ?? 'shared';
   const modeRadio = document.querySelector(`input[name="coach_mode"][value="${mode}"]`);
