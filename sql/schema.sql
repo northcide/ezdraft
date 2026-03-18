@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   coach_name              VARCHAR(255) DEFAULT NULL,
   coach_pin               VARCHAR(255) DEFAULT NULL,
   coach_mode              ENUM('shared','team') NOT NULL DEFAULT 'shared',
+  draft_type              ENUM('snake','straight') NOT NULL DEFAULT 'snake',
   created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -78,6 +79,9 @@ CREATE TABLE IF NOT EXISTS picks (
 INSERT IGNORE INTO settings (`key`, value) VALUES
   ('league_name', 'My League'),
   ('admin_pin',   'admin1234');
+
+-- Draft type column (added 2026-03-17)
+-- ALTER TABLE drafts ADD COLUMN draft_type ENUM('snake','straight') NOT NULL DEFAULT 'snake';
 
 -- Link-based sign-in tokens (added 2026-03-17)
 -- ALTER TABLE drafts

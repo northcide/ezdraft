@@ -489,6 +489,9 @@ _settingsFields.forEach(id => {
 document.querySelectorAll('input[name="coach_mode"]').forEach(r =>
   r.addEventListener('change', markSettingsDirty)
 );
+document.querySelectorAll('input[name="draft_type"]').forEach(r =>
+  r.addEventListener('change', markSettingsDirty)
+);
 
 // Audio toggle — topbar mute button + settings checkbox stay in sync
 function setAudio(enabled) {
@@ -530,6 +533,10 @@ function fillSettingsForm() {
   const coachPinEl  = document.getElementById('setting-coach-pin');
 
   if (!nameEl) return;
+  const draftType = d?.draft_type ?? 'snake';
+  const typeRadio = document.querySelector(`input[name="draft_type"][value="${draftType}"]`);
+  if (typeRadio) typeRadio.checked = true;
+
   const mode = d?.coach_mode ?? 'shared';
   const modeRadio = document.querySelector(`input[name="coach_mode"][value="${mode}"]`);
   if (modeRadio) modeRadio.checked = true;
@@ -630,6 +637,7 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
         ? { coach_pin: document.getElementById('setting-coach-pin').value.trim() }
         : {}),
     coach_mode:        document.querySelector('input[name="coach_mode"]:checked')?.value ?? 'shared',
+    draft_type:        document.querySelector('input[name="draft_type"]:checked')?.value ?? 'snake',
   };
   try {
     const data = await api(API.drafts, 'update_settings', payload);

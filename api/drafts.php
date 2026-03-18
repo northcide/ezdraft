@@ -55,17 +55,28 @@ try {
         return $teams[$pos];
     }
 
+    function straightTeamForPick(array $teams, int $pickNum): array {
+        $n   = count($teams);
+        $pos = ($pickNum - 1) % $n;
+        return $teams[$pos];
+    }
+
     function buildPickSlots(PDO $db, int $draftId, int $totalRounds): void {
         $teams = sortedTeams($db, $draftId);
         $n     = count($teams);
         if ($n === 0) return;
+        $draftStmt = $db->prepare('SELECT draft_type FROM drafts WHERE id=?');
+        $draftStmt->execute([$draftId]);
+        $draftType = $draftStmt->fetchColumn() ?: 'snake';
         $db->prepare('DELETE FROM picks WHERE draft_id=?')->execute([$draftId]);
         $stmt = $db->prepare(
             'INSERT INTO picks (draft_id, round, pick_num, team_id) VALUES (?,?,?,?)'
         );
         for ($p = 1; $p <= $n * $totalRounds; $p++) {
             $round = (int)ceil($p / $n);
-            $team  = snakeTeamForPick($teams, $p);
+            $team  = $draftType === 'straight'
+                ? straightTeamForPick($teams, $p)
+                : snakeTeamForPick($teams, $p);
             $stmt->execute([$draftId, $round, $p, $team['id']]);
         }
     }
@@ -152,7 +163,7 @@ try {
                 $db->query(
                     'SELECT id, name, status, total_rounds, timer_minutes, auto_pick_enabled,
                             coach_name, coach_pin, coach_login_token, coach_token_expires_at,
-                            coach_mode, created_at, started_at, completed_at, archived
+                            coach_mode, draft_type, created_at, started_at, completed_at, archived
                      FROM drafts WHERE archived = 0 ORDER BY created_at DESC'
                 )->fetchAll()
             );
@@ -293,9 +304,10 @@ try {
             $coachPin = $draft['coach_pin'];
         }
         $coachMode = in_array($data['coach_mode'] ?? '', ['shared', 'team']) ? $data['coach_mode'] : ($draft['coach_mode'] ?? 'shared');
+        $draftType = in_array($data['draft_type'] ?? '', ['snake', 'straight']) ? $data['draft_type'] : ($draft['draft_type'] ?? 'snake');
 
-        $db->prepare('UPDATE drafts SET name=?, timer_minutes=?, auto_pick_enabled=?, coach_name=?, coach_pin=?, coach_mode=? WHERE id=?')
-           ->execute([$name, $timer, $auto, $coachName, $coachPin, $coachMode, $draft['id']]);
+        $db->prepare('UPDATE drafts SET name=?, timer_minutes=?, auto_pick_enabled=?, coach_name=?, coach_pin=?, coach_mode=?, draft_type=? WHERE id=?')
+           ->execute([$name, $timer, $auto, $coachName, $coachPin, $coachMode, $draftType, $draft['id']]);
         jsonResponse(fullState($db));
 
     } elseif ($action === 'setup_picks') {

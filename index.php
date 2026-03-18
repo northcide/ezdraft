@@ -247,6 +247,14 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
             <label class="label-check"><input type="checkbox" id="setting-autopick" checked> Auto-pick on expire</label>
           </div>
         </div>
+        <div class="admin-row" id="draft-type-row" style="margin-top:4px">
+          <label class="label-check">
+            <input type="radio" name="draft_type" value="snake" checked> Snake Draft
+          </label>
+          <label class="label-check">
+            <input type="radio" name="draft_type" value="straight"> Straight Draft
+          </label>
+        </div>
         <div class="tab-divider"></div>
         <div class="admin-row" id="coach-mode-row">
           <label class="label-check">

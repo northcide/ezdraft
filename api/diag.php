@@ -60,7 +60,7 @@ $expected = [
         'id','name','status','total_rounds','timer_minutes','auto_pick_enabled',
         'current_pick_num','timer_end','timer_remaining_seconds','started_at',
         'completed_at','archived','coach_name','coach_pin','coach_mode',
-        'coach_login_token','coach_token_expires_at','created_at','updated_at',
+        'coach_login_token','coach_token_expires_at','draft_type','created_at','updated_at',
     ],
     'players' => [
         'id','draft_id','name','rank','position','is_coaches_kid',
