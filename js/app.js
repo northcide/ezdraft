@@ -1799,11 +1799,11 @@ function updateControls() {
     if (btnArchive)   btnArchive.classList.toggle('hidden', !isCompleted);
     if (btnUnarchive) btnUnarchive.classList.add('hidden');
 
-    // Primary VCR button morphs icon + color based on status
-    btnPrimary.className = 'btn btn-vcr';
+    // Primary button label + color based on status
+    btnPrimary.className = 'btn btn-sm';
     if (status === 'setup') {
       const setupIncomplete = settingsDirty || !state.teams.length || !state.players.length || !state.picks?.length || state.teamsNeedSetup;
-      btnPrimary.innerHTML = '&#9654;';
+      btnPrimary.textContent = 'Start';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = setupIncomplete;
       btnPrimary.title = setupIncomplete
@@ -1811,22 +1811,22 @@ function updateControls() {
           : !state.teams.length   ? 'Add teams first'
           : !state.players.length ? 'Add players first'
           : 'Build the pick order first')
-        : 'Start draft';
+        : '';
     } else if (status === 'active') {
-      btnPrimary.innerHTML = '&#9646;&#9646;';
+      btnPrimary.textContent = 'Pause';
       btnPrimary.classList.add('btn-warning');
       btnPrimary.disabled = false;
-      btnPrimary.title = 'Pause draft';
+      btnPrimary.title = '';
     } else if (status === 'paused') {
-      btnPrimary.innerHTML = '&#9654;';
+      btnPrimary.textContent = 'Resume';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = false;
-      btnPrimary.title = 'Resume draft';
+      btnPrimary.title = '';
     } else if (status === 'completed') {
-      btnPrimary.innerHTML = '&#8635;';
+      btnPrimary.textContent = 'Restart';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = false;
-      btnPrimary.title = 'Restart draft';
+      btnPrimary.title = '';
     } else {
       btnPrimary.disabled = true;
     }
