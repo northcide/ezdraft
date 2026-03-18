@@ -1652,6 +1652,13 @@ function renderTeamList() {
           renderTeamList();
           try {
             await api(API.teams, 'reorder', reordered.map(t => ({ id: t.id, draft_order: t.draft_order })));
+            // Rebuild pick slots so the board reflects the new team order
+            if (state.draft && state.picks.length > 0) {
+              const data = await api(API.drafts, 'setup_picks', {});
+              applyState(data);
+            } else {
+              await fetchState();
+            }
           } catch (err) {
             alert('Error saving order: ' + err.message);
             await fetchState();
