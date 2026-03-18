@@ -61,6 +61,13 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
 .btn-danger-outline { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
 .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-vcr {
+  width: 32px; height: 32px; padding: 0;
+  border-radius: 6px;
+  font-size: 13px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
 
 .input-sm {
   background: #fff; border: 1px solid var(--border); color: var(--text);

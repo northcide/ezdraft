@@ -1799,11 +1799,11 @@ function updateControls() {
     if (btnArchive)   btnArchive.classList.toggle('hidden', !isCompleted);
     if (btnUnarchive) btnUnarchive.classList.add('hidden');
 
-    // Primary button morphs: Start → Pause → Resume → Restart
-    btnPrimary.className = 'btn btn-sm';
+    // Primary VCR button morphs icon + color based on status
+    btnPrimary.className = 'btn btn-vcr';
     if (status === 'setup') {
       const setupIncomplete = settingsDirty || !state.teams.length || !state.players.length || !state.picks?.length || state.teamsNeedSetup;
-      btnPrimary.textContent = '\u25B6 Start';
+      btnPrimary.innerHTML = '&#9654;';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = setupIncomplete;
       btnPrimary.title = setupIncomplete
@@ -1811,28 +1811,30 @@ function updateControls() {
           : !state.teams.length   ? 'Add teams first'
           : !state.players.length ? 'Add players first'
           : 'Build the pick order first')
-        : '';
+        : 'Start draft';
     } else if (status === 'active') {
-      btnPrimary.textContent = '\u23F8 Pause';
+      btnPrimary.innerHTML = '&#9646;&#9646;';
       btnPrimary.classList.add('btn-warning');
       btnPrimary.disabled = false;
-      btnPrimary.title = '';
+      btnPrimary.title = 'Pause draft';
     } else if (status === 'paused') {
-      btnPrimary.textContent = '\u25B6 Resume';
+      btnPrimary.innerHTML = '&#9654;';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = false;
-      btnPrimary.title = '';
+      btnPrimary.title = 'Resume draft';
     } else if (status === 'completed') {
-      btnPrimary.textContent = '\u21BA Restart';
+      btnPrimary.innerHTML = '&#8635;';
       btnPrimary.classList.add('btn-success');
       btnPrimary.disabled = false;
-      btnPrimary.title = '';
+      btnPrimary.title = 'Restart draft';
     } else {
       btnPrimary.disabled = true;
     }
 
     btnEnd.disabled = !(status === 'active' || status === 'paused');
-    btnAutopick.classList.toggle('hidden', !(status === 'active' && state.draft?.auto_pick_enabled));
+    const autoPickOn = !!state.draft?.auto_pick_enabled;
+    btnAutopick.classList.toggle('hidden', !autoPickOn);
+    btnAutopick.disabled = status !== 'active';
     btnUndo.classList.toggle('hidden', !(hasFilledPick && (status === 'active' || status === 'paused' || status === 'completed')));
   }
 

@@ -186,10 +186,10 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
 
     <!-- Admin: draft controls (right) -->
     <div id="board-controls-bar" class="draft-bar-right admin-only hidden">
-      <button id="btn-primary"      class="btn btn-sm btn-success" disabled>&#9654; Start</button>
+      <button id="btn-primary"      class="btn btn-vcr btn-success" disabled title="Start">&#9654;</button>
       <button id="btn-archive"      class="btn btn-sm btn-secondary hidden">Archive</button>
       <button id="btn-unarchive"    class="btn btn-sm btn-secondary hidden">Unarchive</button>
-      <button id="btn-end"          class="btn btn-sm btn-danger" disabled>&#9646; End</button>
+      <button id="btn-end"          class="btn btn-vcr btn-danger"  disabled title="End draft">&#9632;</button>
       <button id="btn-autopick-now" class="btn btn-sm btn-secondary hidden">&#9889; Auto-pick</button>
       <button id="btn-undo"        class="btn btn-sm btn-secondary hidden">&#8617; Undo</button>
     </div>
