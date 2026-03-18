@@ -1,6 +1,6 @@
 <?php
 /**
- * EasyDraft Full Diagnostics — run once, then delete.
+ * ezDraft Full Diagnostics — run once, then delete.
  * Access: https://yourdomain.com/api/diag.php?key=checkme
  */
 if (($_GET['key'] ?? '') !== 'checkme') { http_response_code(403); exit('Forbidden'); }

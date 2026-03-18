@@ -123,6 +123,6 @@ try {
     }
 
 } catch (PDOException $e) {
-    error_log('EasyDraft teams error: ' . $e->getMessage());
+    error_log('ezDraft teams error: ' . $e->getMessage());
     jsonError('A server error occurred', 500);
 }

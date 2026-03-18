@@ -55,7 +55,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EasyDraft</title>
+  <title>ezDraft</title>
   <link rel="stylesheet" href="css/app.css?v=<?= $cssV ?>">
 </head>
 <body>
@@ -63,7 +63,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
 <!-- Login Overlay -->
 <div id="login-overlay" class="login-overlay">
   <div class="login-card">
-    <div class="login-logo">EasyDraft</div>
+    <div class="login-logo">ezDraft</div>
     <?php if (!empty($tokenExpiredMessage)): ?>
       <div class="token-expired-notice"><?= htmlspecialchars($tokenExpiredMessage) ?></div>
     <?php endif; ?>
@@ -125,7 +125,7 @@ $jsV  = filemtime(__DIR__ . '/js/app.js');
   <!-- Top Bar -->
   <header id="topbar">
     <div class="topbar-left">
-      <span class="logo">EasyDraft</span>
+      <span class="logo">ezDraft</span>
     </div>
     <div class="topbar-center" id="timer-area">
       <div id="timer-display" class="timer-display hidden">

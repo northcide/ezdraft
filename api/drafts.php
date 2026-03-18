@@ -713,6 +713,6 @@ try {
     }
 
 } catch (PDOException $e) {
-    error_log('EasyDraft drafts error: ' . $e->getMessage());
+    error_log('ezDraft drafts error: ' . $e->getMessage());
     jsonError('A server error occurred', 500);
 }

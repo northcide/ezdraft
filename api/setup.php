@@ -1,6 +1,6 @@
 <?php
 /**
- * EasyDraft setup — run once to initialise the database.
+ * ezDraft setup — run once to initialise the database.
  * Access via browser: http://your-server/easydraft/api/setup.php
  * DELETE or restrict this file after setup is complete.
  */
@@ -12,7 +12,7 @@ if (file_exists(__DIR__ . '/config.php')) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>EasyDraft Setup</title>
+<title>ezDraft Setup</title>
 <style>
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5;
          display: flex; align-items: center; justify-content: center;
@@ -26,7 +26,7 @@ if (file_exists(__DIR__ . '/config.php')) {
 </head>
 <body>
 <div class="card">
-  <h1>⚾ EasyDraft</h1>
+  <h1>⚾ ezDraft</h1>
   <p>Setup has already been completed. If you need to reconfigure, remove
      <code>api/config.php</code> and run setup again.</p>
 </div>
@@ -85,7 +85,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute(['league_name', $league]);
             $stmt->execute(['admin_pin',   password_hash($adminPin, PASSWORD_DEFAULT)]);
 
-            $success = "Setup complete! You can now <a href=\"../\">open EasyDraft</a>.";
+            $success = "Setup complete! You can now <a href=\"../\">open ezDraft</a>.";
         } catch (Exception $e) {
             $error = 'Setup failed: ' . htmlspecialchars($e->getMessage());
         }
@@ -95,7 +95,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>EasyDraft Setup</title>
+<title>ezDraft Setup</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
@@ -114,7 +114,7 @@ if ($step === 1 && $_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 <div class="card">
-  <h1>⚾ EasyDraft Setup</h1>
+  <h1>⚾ ezDraft Setup</h1>
   <p class="sub">Configure your database and league settings to get started.</p>
 
   <?php if ($error):   ?><div class="error"><?= $error ?></div><?php endif; ?>

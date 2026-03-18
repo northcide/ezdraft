@@ -1,6 +1,6 @@
 <?php
 /**
- * EasyDraft Schema Checker — run once, then delete.
+ * ezDraft Schema Checker — run once, then delete.
  * Access via browser: https://yourdomain.com/api/check_schema.php?key=checkme
  */
 if (($_GET['key'] ?? '') !== 'checkme') { http_response_code(403); exit('Forbidden'); }

@@ -1,4 +1,4 @@
-/* EasyDraft – Frontend Logic */
+/* ezDraft – Frontend Logic */
 'use strict';
 
 const API = {

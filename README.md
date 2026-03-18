@@ -1,4 +1,4 @@
-# EasyDraft
+# ezDraft
 
 A web-based draft management system for youth sports leagues. Supports multiple simultaneous drafts, a live admin board, team login, and a read-only coach view on any device.
 

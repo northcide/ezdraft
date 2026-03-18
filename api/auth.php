@@ -11,7 +11,7 @@ try {
         $name = $db->query("SELECT value FROM settings WHERE `key`='league_name'")->fetchColumn();
         $result = [
             'role'       => $role,
-            'league_name'=> $name ?: 'EasyDraft',
+            'league_name'=> $name ?: 'ezDraft',
             'csrf_token' => $_SESSION['csrf_token'],
         ];
         if ($role === 'coach') {
@@ -174,7 +174,7 @@ try {
     }
 
 } catch (PDOException $e) {
-    error_log('EasyDraft auth error: ' . $e->getMessage());
+    error_log('ezDraft auth error: ' . $e->getMessage());
     jsonError('A server error occurred', 500);
 }
 
