@@ -88,6 +88,10 @@ function applyRole() {
   document.querySelectorAll('.admin-only').forEach(el => {
     el.classList.toggle('hidden', !isAdmin);
   });
+  if (isAdmin) {
+    const adminOpen = localStorage.getItem('ez_admin_open') !== '0';
+    document.getElementById('admin-panel').classList.toggle('hidden', !adminOpen);
+  }
   document.getElementById('rankings-panel')
     .classList.toggle('hidden', isMobileNonAdmin());
   document.getElementById('topbar-role').textContent =
@@ -1859,7 +1863,9 @@ function updateCurrentPickLabel() {
 
 // ── Draft Control Buttons ─────────────────────────────────────────────────────
 document.getElementById('btn-admin').addEventListener('click', () => {
-  document.getElementById('admin-panel').classList.toggle('hidden');
+  const panel = document.getElementById('admin-panel');
+  panel.classList.toggle('hidden');
+  localStorage.setItem('ez_admin_open', panel.classList.contains('hidden') ? '0' : '1');
 });
 
 // ── Collapse stepper panels ───────────────────────────────────────────────────
