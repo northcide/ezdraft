@@ -1,5 +1,7 @@
 # ezDraft
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/mvarre)
+
 A web-based draft management system for youth sports leagues. Supports multiple simultaneous drafts, a live admin board, team login, and a read-only coach view on any device.
 
 ## Stack
