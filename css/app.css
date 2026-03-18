@@ -162,6 +162,9 @@ html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; backg
   background: var(--bg3); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 5px 8px;
 }
+.team-item .team-reorder-handle { color: var(--text3); cursor: grab; padding: 0 4px 0 0; font-size: 13px; }
+.team-item .team-reorder-handle:active { cursor: grabbing; }
+.team-item.reorder-over { outline: 2px dashed var(--accent); border-radius: 4px; }
 .team-item .team-order { color: var(--text3); font-size: 11px; width: 18px; }
 .team-item .team-name  { flex: 1; font-size: 13px; }
 .team-item .btn-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 0 2px; }

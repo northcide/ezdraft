@@ -1595,17 +1595,24 @@ function showReorderStatus(msg, isError = false) {
 }
 
 // ── Team Management ───────────────────────────────────────────────────────────
+let teamDragSrcIdx = null;
+
 function renderTeamList() {
   const list = document.getElementById('team-list');
+  if (teamDragSrcIdx !== null) return; // don't clobber an in-progress drag
   if (list.contains(document.activeElement)) return; // don't clobber an active name/PIN edit
   if (state.teams.length === 0) { list.innerHTML = '<div class="empty-state" style="padding:8px">No teams yet.</div>'; return; }
   list.innerHTML = '';
-  state.teams.forEach(t => {
+  state.teams.forEach((t, idx) => {
     const item = document.createElement('div');
     item.className = 'team-item';
+    item.dataset.idx = idx;
 
     if (state.role === 'admin') {
+      const canReorder = !state.draft || state.draft.status === 'setup';
+      item.draggable = canReorder;
       item.innerHTML =
+        (canReorder ? `<span class="team-reorder-handle" title="Drag to reorder">&#9776;</span>` : '') +
         `<span class="team-order">${t.draft_order}.</span>` +
         `<input type="text" class="team-name-input input-sm" value="${esc(t.name)}" title="Team name">` +
         `<input type="text" class="team-pin-input input-sm" placeholder="${t.has_pin ? '(PIN set — leave blank to keep)' : 'Set a PIN'}" title="Team login PIN">` +
@@ -1615,6 +1622,42 @@ function renderTeamList() {
             + `<button class="btn-gen-team-link btn btn-sm btn-secondary" data-team-id="${t.id}">Link</button>`
           : '') +
         `<button class="btn-delete" title="Remove">\u2715</button>`;
+
+      if (canReorder) {
+        item.addEventListener('dragstart', e => {
+          teamDragSrcIdx = idx;
+          item.classList.add('reorder-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        item.addEventListener('dragend', () => {
+          item.classList.remove('reorder-dragging');
+          list.querySelectorAll('.team-item').forEach(r => r.classList.remove('reorder-over'));
+        });
+        item.addEventListener('dragover', e => {
+          e.preventDefault();
+          list.querySelectorAll('.team-item').forEach(r => r.classList.remove('reorder-over'));
+          item.classList.add('reorder-over');
+        });
+        item.addEventListener('drop', async e => {
+          e.preventDefault();
+          item.classList.remove('reorder-over');
+          const destIdx = Number(item.dataset.idx);
+          if (teamDragSrcIdx === null || teamDragSrcIdx === destIdx) { teamDragSrcIdx = null; return; }
+          const reordered = [...state.teams];
+          const [moved] = reordered.splice(teamDragSrcIdx, 1);
+          reordered.splice(destIdx, 0, moved);
+          reordered.forEach((t, i) => { t.draft_order = i + 1; });
+          state.teams = reordered;
+          teamDragSrcIdx = null;
+          renderTeamList();
+          try {
+            await api(API.teams, 'reorder', reordered.map(t => ({ id: t.id, draft_order: t.draft_order })));
+          } catch (err) {
+            alert('Error saving order: ' + err.message);
+            await fetchState();
+          }
+        });
+      }
 
       const nameInput = item.querySelector('.team-name-input');
       const pinInput  = item.querySelector('.team-pin-input');
